@@ -1,0 +1,9 @@
+# IntelliJ
+.idea/
+*.iml
+
+# Build
+out/
+
+# File dati locali
+*.dat
