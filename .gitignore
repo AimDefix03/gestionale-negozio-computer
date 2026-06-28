@@ -1,9 +1,11 @@
 # IntelliJ
 .idea/
 *.iml
+.DS_Store
 
 # Build
 out/
+target/
 
 # File dati locali
 *.dat

@@ -1,64 +1,108 @@
 # Gestionale Negozio Computer (Java Swing)
 
-Applicazione desktop sviluppata in Java per la gestione di un negozio di computer, realizzata come progetto universitario.
+Applicazione desktop sviluppata in Java Swing per simulare la gestione di un negozio di computer.
 
-## Descrizione
-Il progetto implementa un sistema gestionale con interfaccia grafica sviluppata tramite Java Swing.  
-L’applicazione consente la gestione degli utenti, dei prodotti e delle operazioni di acquisto, simulando un contesto reale di negozio.
-
-La struttura del codice è organizzata secondo i principi della programmazione orientata agli oggetti e utilizza diversi design pattern per garantire modularità e scalabilità.
+Il progetto nasce in ambito universitario e implementa un gestionale con utenti, ruoli, catalogo prodotti, carrello, acquisto simulato, servizi extra sui prodotti e persistenza locale tramite serializzazione su file.
 
 ## Funzionalità principali
+
 - Sistema di login e registrazione utenti
-- Gestione ruoli (Admin / Cliente)
-- Visualizzazione prodotti
+- Gestione ruoli Admin e Cliente
+- Inserimento e visualizzazione prodotti
 - Gestione carrello
 - Simulazione acquisto
-- Interfaccia grafica desktop (Swing)
+- Servizi extra applicabili ai prodotti
+- Interfaccia grafica desktop con Java Swing
+
+## Obiettivi tecnici
+
+- Separare interfaccia Swing e logica applicativa dove possibile.
+- Applicare pattern progettuali in modo riconoscibile e coerente.
+- Gestire prodotti hardware/software tramite Factory.
+- Gestire metodi di pagamento intercambiabili tramite Strategy.
+- Incapsulare l'aggiunta al carrello tramite Command.
+- Estendere i prodotti con servizi extra tramite Decorator.
 
 ## Tecnologie utilizzate
+
 - Java
-- Java Swing (GUI desktop)
-- OOP (Object-Oriented Programming)
+- Java Swing
+- Maven
+- JUnit 5
+- Programmazione orientata agli oggetti
 
-## Architettura del progetto
-Il progetto è organizzato in package:
+## Pattern utilizzati
 
-- `main` → avvio dell’applicazione e gestione GUI principale
-- `model` → rappresentazione dei dati
-- `service` → logica applicativa
-- `factory` → creazione oggetti (Factory Pattern)
-- `strategy` → gestione comportamenti dinamici (Strategy Pattern)
-- `command` → gestione delle azioni (Command Pattern)
-- `decorator` → estensione funzionalità (Decorator Pattern)
-- `utils` → metodi di supporto
+| Pattern | Package | Responsabilità |
+| --- | --- | --- |
+| Factory | `factory` | Creazione di prodotti hardware/software e selezione della factory corretta. |
+| Strategy | `strategy` | Selezione del metodo di pagamento senza accoppiare il carrello alle classi concrete. |
+| Command | `command` | Incapsulamento dell'azione di aggiunta al carrello. |
+| Decorator | `decorator` | Aggiunta di servizi extra ai prodotti senza modificare la classe base. |
 
-## Struttura dell’avvio
-L’applicazione viene avviata tramite:
+## Struttura principale
 
-- `Main.java` → entry point del programma
-- `LoginSystem.java` → gestione interfaccia grafica di login e registrazione
+```text
+src/
+├── main/java
+│   ├── command      # comandi applicativi
+│   ├── decorator    # servizi extra applicati ai prodotti
+│   ├── factory      # creazione dei prodotti
+│   ├── main         # avvio applicazione e GUI login
+│   ├── model        # entità di dominio
+│   ├── service      # logica applicativa e persistenza
+│   ├── strategy     # strategie di pagamento
+│   ├── ui           # azioni e schermate Swing
+│   └── utils        # utility di serializzazione
+└── test/java        # test automatici JUnit
+```
 
-## Design Pattern utilizzati
-- Factory
-- Strategy
-- Command
-- Decorator
+## Requisiti
 
-## Competenze sviluppate
-- Sviluppo di interfacce grafiche con Java Swing
-- Gestione eventi (ActionListener, gestione input utente)
-- Progettazione software modulare
-- Applicazione dei design pattern
-- Separazione tra logica e presentazione (MVC semplificato)
+- Java 17 o superiore
+- Maven 3.8+
 
-## Come eseguire il progetto
-1. Clonare il repository
-2. Aprire il progetto con IntelliJ IDEA
-3. Eseguire la classe `Main.java`
+## Compilazione e test
+
+Compilazione:
+
+```bash
+mvn compile
+```
+
+Test automatici:
+
+```bash
+mvn test
+```
+
+Generazione del jar:
+
+```bash
+mvn package
+```
+
+## Avvio
+
+Con jar generato da Maven:
+
+```bash
+java -jar target/gestionale-negozio-computer-1.0.0.jar
+```
+
+Da IntelliJ IDEA è possibile avviare direttamente la classe `main.Main`.
 
 ## Note
-I file `.dat` vengono utilizzati per la simulazione della persistenza dei dati.
+
+I file `.dat` sono usati per simulare la persistenza locale di utenti, ruoli e prodotti. Non sono pensati per rappresentare una soluzione di sicurezza reale o un database di produzione.
+
+## Possibili evoluzioni
+
+- Estendere i test automatici ai servizi applicativi e ai flussi Swing principali.
+- Separare ulteriormente UI Swing e logica applicativa.
+- Sostituire la persistenza su file con database o repository dedicato.
+- Migliorare la gestione delle credenziali utente.
 
 ## Autore
+
 Giovanni De Filippo
