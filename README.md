@@ -1,8 +1,18 @@
-# Gestionale Negozio Computer
+# Gestionale Negozio Computer (Java Swing)
 
-Applicazione desktop Java Swing per simulare la gestione di un negozio di computer.
+Applicazione desktop sviluppata in Java Swing per simulare la gestione di un negozio di computer.
 
-Il progetto include gestione utenti con ruoli, catalogo prodotti, carrello, acquisto simulato, servizi extra sui prodotti e persistenza locale tramite serializzazione su file.
+Il progetto nasce in ambito universitario e implementa un gestionale con utenti, ruoli, catalogo prodotti, carrello, acquisto simulato, servizi extra sui prodotti e persistenza locale tramite serializzazione su file.
+
+## Funzionalità principali
+
+- Sistema di login e registrazione utenti
+- Gestione ruoli Admin e Cliente
+- Inserimento e visualizzazione prodotti
+- Gestione carrello
+- Simulazione acquisto
+- Servizi extra applicabili ai prodotti
+- Interfaccia grafica desktop con Java Swing
 
 ## Obiettivi tecnici
 
@@ -12,6 +22,14 @@ Il progetto include gestione utenti con ruoli, catalogo prodotti, carrello, acqu
 - Gestire metodi di pagamento intercambiabili tramite Strategy.
 - Incapsulare l'aggiunta al carrello tramite Command.
 - Estendere i prodotti con servizi extra tramite Decorator.
+
+## Tecnologie utilizzate
+
+- Java
+- Java Swing
+- Maven
+- JUnit 5
+- Programmazione orientata agli oggetti
 
 ## Pattern utilizzati
 
@@ -42,41 +60,29 @@ src/
 ## Requisiti
 
 - Java 17 o superiore
-- Maven 3.8+ opzionale, consigliato per compilazione standard
+- Maven 3.8+
 
-## Compilazione
+## Compilazione e test
 
-Con Maven:
+Compilazione:
 
 ```bash
 mvn compile
 ```
 
-Per eseguire anche i test:
+Test automatici:
 
 ```bash
 mvn test
 ```
 
-Per generare il jar:
+Generazione del jar:
 
 ```bash
 mvn package
 ```
 
-Senza Maven:
-
-```bash
-javac -encoding UTF-8 -d out $(find src/main/java -name "*.java")
-```
-
 ## Avvio
-
-Con classi compilate manualmente:
-
-```bash
-java -cp out main.Main
-```
 
 Con jar generato da Maven:
 
@@ -96,3 +102,7 @@ I file `.dat` sono usati per simulare la persistenza locale di utenti, ruoli e p
 - Separare ulteriormente UI Swing e logica applicativa.
 - Sostituire la persistenza su file con database o repository dedicato.
 - Migliorare la gestione delle credenziali utente.
+
+## Autore
+
+Giovanni De Filippo
