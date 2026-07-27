@@ -14,7 +14,7 @@
 
 | Step | Stato | Commit/patch | Test | Note |
 |---|---|---|---|---|
-| 0.1 | PARTIAL | `bd06256` baseline; `7eb650f` allineamento test CI | clone pulito: backend 154/154; frontend 32/32; legacy 41/41; build e config Compose OK | Baseline locale e branch protection applicate; pubblicazione remota e status check obbligatori ancora da completare |
+| 0.1 | PARTIAL | `9f9e23a` baseline pubblicata; `945fcd0` CI; `62a8d14` security | clone pulito: backend 154/154; frontend 32/32; legacy 41/41; build e config Compose OK | Baseline e workflow pubblicati; PR, primo run CI e status check obbligatori ancora da completare |
 | 0.2 | PENDING | - | - | Congelare scope e nuove feature |
 | 0.3 | PENDING | - | - | Fixture anonimizzate e dati di test realistici |
 | 1.1 | PENDING | - | - | Registrazione pubblica limitata a CUSTOMER |
@@ -72,11 +72,12 @@
 - Nessun deploy, commit, push, PR o operazione distruttiva senza autorizzazione esplicita.
 - Nessuna nuova funzione commerciale prima della chiusura dei P0 e dei gate dipendenti.
 - Il 2026-07-27 e stato autorizzato il commit della baseline e la configurazione della branch protection su `main`.
+- Il 2026-07-27 e stato autorizzato il push della branch `miglioramenti-gestionale`.
 
 ## Blocker
 
-- I commit locali non sono stati pubblicati: il push non era compreso nell'autorizzazione e resta vietato senza consenso esplicito.
-- La branch protection remota e attiva su `main`, ma i required status check non sono selezionabili finche il workflow non viene pubblicato e non produce i relativi contesti almeno una volta.
+- I workflow si attivano su pull request verso `main`; la creazione della PR richiede un'autorizzazione esplicita separata.
+- La branch protection remota e attiva su `main`, ma i required status check non sono selezionabili finche il workflow non produce i relativi contesti almeno una volta.
 
 ## Verifiche Step 0.1
 
@@ -84,8 +85,10 @@
 - Scansione Gitleaks cronologia: 3 commit, nessuna rilevazione.
 - Scansione Gitleaks baseline candidata: circa 1,69 MB, nessuna rilevazione.
 - File sensibili o artefatti locali candidati: nessuno; sono presenti soltanto template `.env.example` e migrazioni Flyway intenzionali.
-- Commit baseline creato nel repository reale: `bd06256cf57dd5b97de75caeff749892f55eb8b7`.
-- Contratto del test CI allineato al nome artifact con SHA: commit `7eb650f`.
+- Baseline pubblicata su `origin/miglioramenti-gestionale`: commit `9f9e23a`.
+- Workflow CI pubblicato tramite sessione GitHub autenticata: commit `945fcd0`.
+- Workflow security pubblicato tramite sessione GitHub autenticata: commit `62a8d14`.
+- I commit locali originali sono preservati nelle branch `baseline-pre-publication-20260727` e `miglioramenti-gestionale-pre-publication`.
 - Clone pulito creato dal repository reale e verificato senza file esterni non documentati.
 - Backend nel clone pulito: `mvn -B verify`, 154 test passati, JAR generato.
 - Frontend nel clone pulito: `npm ci`; 32 test passati; typecheck applicativo ed E2E passati; build Vite passata.
@@ -99,7 +102,7 @@
 
 ## Rischi residui
 
-- F-20 e corretto nella baseline locale, ma resta formalmente aperto finche i commit non vengono pubblicati sul remoto e i check CI non diventano obbligatori.
+- F-20 e corretto nella baseline locale e remota, ma resta formalmente aperto finche la CI remota non passa e i relativi check non diventano obbligatori.
 - I risultati del clone pulito non sostituiscono una CI eseguita sul repository remoto.
 - La branch protection non impone ancora i contesti `Backend Spring Boot`, `Frontend React`, `Prod-like Docker stack` e `Quality gate`.
 - Non eseguire i runner prod-like/E2E prima del completamento dello Step 1.5.
