@@ -161,6 +161,39 @@ jobs:
       - name: Apply Flyway migrations and validate schema
         run: mvn -B -Dtest=DatabaseBusinessConstraintTest test
 
+  prod-like-stack:
+    name: Prod-like Docker stack
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs:
+      - repository-hygiene
+    env:
+      PLAYWRIGHT_INSTALL_WITH_DEPS: "true"
+      PRODLIKE_DIAGNOSTICS_DIR: /tmp/prod-like-diagnostics
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Run recurring prod-like verification
+        run: sh scripts/ci/run-prod-like-verification.sh
+
+      - name: Upload prod-like diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-like-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/prod-like-diagnostics
+          if-no-files-found: error
+          retention-days: 7
+
   quality-gate:
     name: Quality gate
     runs-on: ubuntu-latest
