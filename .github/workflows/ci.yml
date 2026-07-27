@@ -147,7 +147,7 @@ jobs:
       - repository-hygiene
     env:
       PLAYWRIGHT_INSTALL_WITH_DEPS: "true"
-      PRODLIKE_DIAGNOSTICS_DIR: ${{ runner.temp }}/prod-like-diagnostics
+      PRODLIKE_DIAGNOSTICS_DIR: /tmp/prod-like-diagnostics
     steps:
       - name: Checkout
         uses: actions/checkout@v4
