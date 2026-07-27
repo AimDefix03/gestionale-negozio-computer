@@ -1,0 +1,184 @@
+name: Gestionale CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gestionale-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reject tracked local environment files
+        run: |
+          set -euo pipefail
+          tracked_env_files="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v -E '(^|/)\.env\.example$|(^|/)\.env\.docker\.example$' || true)"
+          if [ -n "$tracked_env_files" ]; then
+            echo "Tracked environment files are not allowed:"
+            echo "$tracked_env_files"
+            exit 1
+          fi
+
+      - name: Reject tracked local build artifacts
+        run: |
+          set -euo pipefail
+          tracked_artifacts="$(git ls-files | grep -E '(^|/)(target|dist|node_modules)/|\.dat$' || true)"
+          if [ -n "$tracked_artifacts" ]; then
+            echo "Tracked local artifacts are not allowed:"
+            echo "$tracked_artifacts"
+            exit 1
+          fi
+
+      - name: Reject demo credentials in public frontend
+        run: |
+          set -euo pipefail
+          if grep -R -E 'Admin123|admin/Admin|Admin iniziale' web/frontend/src web/frontend/index.html; then
+            echo "Demo credentials must not appear in the frontend."
+            exit 1
+          fi
+
+      - name: Validate release documentation
+        run: |
+          set -euo pipefail
+          test -f docs/CONFIGURATION.md
+          test -f docs/RELEASE_CHECKLIST.md
+          test -f docs/SECURITY.md
+          test -f docs/SECRET_ROTATION.md
+          test -f docs/TESTING.md
+          test -f docs/OBSERVABILITY.md
+          test -f docs/PROD_LIKE_VERIFICATION.md
+          test -f docs/MULTI_TENANCY_ARCHITECTURE.md
+          test -f docs/DECISIONS/0005-multi-tenant-isolation-strategy.md
+          test -f docs/PRIVACY_RETENTION_EINVOICING_ARCHITECTURE.md
+          test -f docs/DECISIONS/0006-privacy-retention-einvoicing-boundaries.md
+          test -f docs/CUSTOMER_LIFECYCLE_AND_RELEASE_ARCHITECTURE.md
+          test -f docs/DECISIONS/0007-customer-lifecycle-and-release-fleet.md
+
+  backend:
+    name: Backend Spring Boot
+    runs-on: ubuntu-latest
+    needs:
+      - repository-hygiene
+    defaults:
+      run:
+        working-directory: web/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Test and package backend
+        run: mvn -B verify
+
+      - name: Upload backend artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gestionale-api-${{ github.sha }}
+          path: web/backend/target/*.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  frontend:
+    name: Frontend React
+    runs-on: ubuntu-latest
+    needs:
+      - repository-hygiene
+    defaults:
+      run:
+        working-directory: web/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gestionale-frontend-${{ github.sha }}
+          path: web/frontend/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  prod-like-stack:
+    name: Prod-like Docker stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs:
+      - repository-hygiene
+    env:
+      PLAYWRIGHT_INSTALL_WITH_DEPS: "true"
+      PRODLIKE_DIAGNOSTICS_DIR: ${{ runner.temp }}/prod-like-diagnostics
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Run recurring prod-like verification
+        run: sh scripts/ci/run-prod-like-verification.sh
+
+      - name: Upload prod-like diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-like-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prod-like-diagnostics
+          if-no-files-found: error
+          retention-days: 7
+
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    needs:
+      - repository-hygiene
+      - backend
+      - frontend
+      - prod-like-stack
+    steps:
+      - name: Report status
+        run: echo "Gestionale CI completed successfully."
