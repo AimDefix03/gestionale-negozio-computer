@@ -1,107 +1,185 @@
-# Gestionale Negozio Computer (Java Swing)
+# Gestionale Negozio Computer
 
-Applicazione desktop sviluppata in Java Swing per simulare la gestione di un negozio di computer.
+Gestionale web per catalogo, magazzino, ordini, pagamenti, documenti simulati, configurazione aziendale, report operativi, anagrafiche, account e audit.
 
-Il progetto nasce in ambito universitario e implementa un gestionale con utenti, ruoli, catalogo prodotti, carrello, acquisto simulato, servizi extra sui prodotti e persistenza locale tramite serializzazione su file.
+La linea produttiva e composta da backend Spring Boot, frontend React e PostgreSQL. La precedente applicazione Java Swing e conservata esclusivamente come riferimento funzionale e didattico.
 
-## Funzionalità principali
+## Stato del progetto
 
-- Sistema di login e registrazione utenti
-- Gestione ruoli Admin e Cliente
-- Inserimento e visualizzazione prodotti
-- Gestione carrello
-- Simulazione acquisto
-- Servizi extra applicabili ai prodotti
-- Interfaccia grafica desktop con Java Swing
+Il progetto e un MVP web avanzato in evoluzione verso un monolite modulare predisposto alla produzione.
 
-## Obiettivi tecnici
+- Il backend applica autorizzazioni, validazioni e regole aziendali lato server.
+- Il database evolve tramite migrazioni Flyway versionate.
+- I flussi critici usano audit, idempotenza e codici richiesta correlati.
+- Le build web e legacy sono separate.
+- Il sistema non e dichiarato conforme alla fatturazione elettronica, alla normativa fiscale italiana o al GDPR.
+- Multi-tenancy, onboarding SaaS, branding cliente, provisioning automatico e aggiornamento della flotta sono proposte target, non funzionalita disponibili.
 
-- Separare interfaccia Swing e logica applicativa dove possibile.
-- Applicare pattern progettuali in modo riconoscibile e coerente.
-- Gestire prodotti hardware/software tramite Factory.
-- Gestire metodi di pagamento intercambiabili tramite Strategy.
-- Incapsulare l'aggiunta al carrello tramite Command.
-- Estendere i prodotti con servizi extra tramite Decorator.
+## Funzionalita web
 
-## Tecnologie utilizzate
+- Account con ruoli e permessi granulari.
+- Sessioni persistenti con scadenza assoluta, timeout inattivita, rotazione token, BCrypt, password policy, lockout backend e rate limiting Nginx sul login.
+- Catalogo prodotti con stato attivo/disattivato.
+- Giacenza fisica, stock riservato e disponibilita vendibile.
+- Movimenti di magazzino e protezione da aggiornamenti concorrenti.
+- Anagrafiche clienti e fornitori.
+- Ordini con workflow bozza, conferma, evasione e annullamento.
+- Pagamenti strutturati con metodo, stato, importi e valuta.
+- Configurazione aziendale protetta con dati emittente, IVA predefinita e controllo versione.
+- Documenti fiscali simulati con snapshot cliente/azienda e numerazione annuale atomica per tipo.
+- Report vendite e magazzino filtrati lato server, esportabili in CSV, Excel e PDF.
+- Dashboard aggregata, audit e monitoraggio operativo.
+- Log JSON correlati, metriche Prometheus e regole di alert operative.
+- Paginazione, filtri server-side e interfaccia responsive.
+- Backup PostgreSQL atomici con checksum, retention, controllo freschezza e restore drill isolato.
 
-- Java
-- Java Swing
+## Stack
+
+Backend:
+
+- Java 17
+- Spring Boot 3.4
+- Spring Security
+- Spring Data JPA
+- Spring Modulith
+- PostgreSQL
+- Flyway
 - Maven
-- JUnit 5
-- Programmazione orientata agli oggetti
 
-## Pattern utilizzati
+Frontend:
 
-| Pattern | Package | Responsabilità |
-| --- | --- | --- |
-| Factory | `factory` | Creazione di prodotti hardware/software e selezione della factory corretta. |
-| Strategy | `strategy` | Selezione del metodo di pagamento senza accoppiare il carrello alle classi concrete. |
-| Command | `command` | Incapsulamento dell'azione di aggiunta al carrello. |
-| Decorator | `decorator` | Aggiunta di servizi extra ai prodotti senza modificare la classe base. |
+- React
+- TypeScript
+- Vite
+- Vitest e React Testing Library
+- Playwright
 
-## Struttura principale
+Infrastruttura:
+
+- Docker e Docker Compose
+- GitHub Actions
+- Nginx
+- Prometheus
+
+## Struttura
 
 ```text
-src/
-├── main/java
-│   ├── command      # comandi applicativi
-│   ├── decorator    # servizi extra applicati ai prodotti
-│   ├── factory      # creazione dei prodotti
-│   ├── main         # avvio applicazione e GUI login
-│   ├── model        # entità di dominio
-│   ├── service      # logica applicativa e persistenza
-│   ├── strategy     # strategie di pagamento
-│   ├── ui           # azioni e schermate Swing
-│   └── utils        # utility di serializzazione
-└── test/java        # test automatici JUnit
+.
+├── pom.xml                 # Build aggregata web-first
+├── pom-legacy.xml          # Build esplicita Swing
+├── web/backend/            # API Spring Boot
+├── web/frontend/           # Applicazione React
+├── src/                    # Codice Swing legacy
+├── scripts/                # Verifiche E2E, backup e restore
+└── docs/                   # Documentazione tecnica e operativa
 ```
 
-## Requisiti
+## Verifica
 
-- Java 17 o superiore
-- Maven 3.8+
-
-## Compilazione e test
-
-Compilazione:
+Build backend dalla root:
 
 ```bash
-mvn compile
+mvn verify
 ```
 
-Test automatici:
+Frontend:
 
 ```bash
-mvn test
+cd web/frontend
+npm ci
+npm test
+npm run build
 ```
 
-Generazione del jar:
+Smoke test browser su stack isolato:
 
 ```bash
-mvn package
+E2E_USERNAME=nome_super_admin_e2e \
+E2E_PASSWORD=password_e2e_forte \
+GESTIONALE_E2E_DB_PASSWORD=password_database_e2e \
+scripts/e2e/run-web-smoke.sh
 ```
 
-## Avvio
-
-Con jar generato da Maven:
+Lo smoke verifica anche CSP, header browser e cache Nginx. Su uno stack gia avviato il controllo dedicato e:
 
 ```bash
-java -jar target/gestionale-negozio-computer-1.0.0.jar
+scripts/security/verify-browser-security.sh http://127.0.0.1:8081
 ```
 
-Da IntelliJ IDEA è possibile avviare direttamente la classe `main.Main`.
+Verifica inoltre che PostgreSQL, backend e frontend siano eseguiti senza privilegi root, con filesystem root read-only e capability Linux eliminate:
 
-## Note
+```bash
+scripts/security/verify-container-hardening.sh \
+  gestionale-prodlike-postgres \
+  gestionale-prodlike-backend \
+  gestionale-prodlike-frontend
+```
 
-I file `.dat` sono usati per simulare la persistenza locale di utenti, ruoli e prodotti. Non sono pensati per rappresentare una soluzione di sicurezza reale o un database di produzione.
+Verifica il ciclo backup e restore senza toccare il database operativo:
 
-## Possibili evoluzioni
+```bash
+scripts/db/test-backup-lifecycle.sh
+scripts/db/verify-backup-schedule.sh
+scripts/db/verify-backup-restore.sh
+```
 
-- Estendere i test automatici ai servizi applicativi e ai flussi Swing principali.
-- Separare ulteriormente UI Swing e logica applicativa.
-- Sostituire la persistenza su file con database o repository dedicato.
-- Migliorare la gestione delle credenziali utente.
+Validazione e verifica dell'osservabilita:
+
+```bash
+scripts/observability/verify-prometheus-config.sh
+scripts/observability/verify-runtime-observability.sh
+scripts/observability/verify-prometheus-hardening.sh
+```
+
+Verifica completa e isolata dello stack prod-like:
+
+```bash
+scripts/ci/run-prod-like-verification.sh
+```
+
+Il runner costruisce le immagini aggiornando le basi, verifica Flyway, sicurezza, osservabilita, smoke test browser, backup/restore e assenza di risorse Docker residue.
+
+## Avvio Docker
+
+Preparare un file `.env.docker` partendo da `.env.docker.example` e creare i file secret fuori dal repository. L'avvio raccomandato e:
+
+```bash
+docker compose --env-file .env.docker \
+  -f docker-compose.prod-like.yml \
+  -f docker-compose.secrets.yml \
+  up --build
+```
+
+Il bootstrap iniziale usa temporaneamente anche `docker-compose.bootstrap-secret.yml`. La procedura completa e la rotazione sono descritte in `docs/SECRET_ROTATION.md`.
+
+## Legacy Swing
+
+Swing non fa parte della build produttiva. Rimane verificabile con:
+
+```bash
+mvn -f pom-legacy.xml test
+mvn -f pom-legacy.xml package
+```
+
+La strategia di dismissione e descritta in `docs/LEGACY_SWING.md`.
+
+## Documentazione
+
+- `docs/USER_MANUAL.md`
+- `docs/ARCHITECTURE.md`
+- `docs/MODULE_BOUNDARIES.md`
+- `docs/API_CONTRACT.md`
+- `docs/SECURITY.md`
+- `docs/TESTING.md`
+- `docs/DEPLOYMENT.md`
+- `docs/SECRET_ROTATION.md`
+- `docs/BACKUP_RESTORE.md`
+- `docs/OBSERVABILITY.md`
+- `docs/PROD_LIKE_VERIFICATION.md`
+- `docs/MULTI_TENANCY_ARCHITECTURE.md`
+- `docs/PRIVACY_RETENTION_EINVOICING_ARCHITECTURE.md`
+- `docs/CUSTOMER_LIFECYCLE_AND_RELEASE_ARCHITECTURE.md`
+- `docs/ROADMAP.md`
 
 ## Autore
 

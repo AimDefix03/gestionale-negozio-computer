@@ -18,6 +18,8 @@ public final class AdminActions {
         JTextField codiceField = new JTextField();
         JTextField nomeField = new JTextField();
         JTextField descrizioneField = new JTextField();
+        JTextField brandField = new JTextField();
+        JTextField tipoProdottoField = new JTextField();
         JTextField utilizzoField = new JTextField();
         JTextField quantitaField = new JTextField();
         JTextField costoField = new JTextField();
@@ -35,7 +37,11 @@ public final class AdminActions {
         panel.add(nomeField);
         panel.add(new JLabel("Descrizione:"));
         panel.add(descrizioneField);
-        panel.add(new JLabel("Utilizzo:"));
+        panel.add(new JLabel("Brand:"));
+        panel.add(brandField);
+        panel.add(new JLabel("Tipo prodotto:"));
+        panel.add(tipoProdottoField);
+        panel.add(new JLabel("Utilizzo opzionale:"));
         panel.add(utilizzoField);
         panel.add(new JLabel("Quantità:"));
         panel.add(quantitaField);
@@ -52,13 +58,15 @@ public final class AdminActions {
                 String codice = codiceField.getText();
                 String nome = nomeField.getText();
                 String descrizione = descrizioneField.getText();
+                String brand = brandField.getText();
+                String tipoProdotto = tipoProdottoField.getText();
                 String utilizzo = utilizzoField.getText();
                 int quantita = Integer.parseInt(quantitaField.getText());
                 double costo = Double.parseDouble(costoField.getText());
                 double sconto = Double.parseDouble(scontoField.getText());
                 CategoriaProdotto categoria = CategoriaProdotto.fromLabel((String) categoryBox.getSelectedItem());
 
-                productService.creaEInserisciProdotto(codice, nome, descrizione, utilizzo, quantita, costo, sconto, categoria);
+                productService.creaEInserisciProdotto(codice, nome, descrizione, brand, tipoProdotto, utilizzo, quantita, costo, sconto, categoria);
                 JOptionPane.showMessageDialog(null, "Prodotto aggiunto con successo!", "Successo", JOptionPane.INFORMATION_MESSAGE);
             } catch (NumberFormatException e) {
                 JOptionPane.showMessageDialog(null, "Errore: Inserisci valori numerici validi per quantità, costo e sconto.", "Errore", JOptionPane.ERROR_MESSAGE);
@@ -77,6 +85,8 @@ public final class AdminActions {
             for (Prodotto product : productList) {
                 products.append("Codice: ").append(product.getCodice())
                         .append(", Nome: ").append(product.getNome())
+                        .append(", Brand: ").append(product.getBrand())
+                        .append(", Tipo: ").append(product.getTipoProdotto())
                         .append(", Descrizione: ").append(product.getDescrizione())
                         .append(", Prezzo: ").append(product.getCostoScontato()).append("€ (Sconto: ")
                         .append(product.getSconto()).append("%), Quantità: ").append(product.getQuantita())

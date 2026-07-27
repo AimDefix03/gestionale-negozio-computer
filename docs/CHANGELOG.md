@@ -1,0 +1,180 @@
+# Changelog
+
+Tutte le modifiche rilevanti del gestionale web vengono registrate in questo file.
+
+## Non rilasciato
+
+### Aggiunto
+
+- Runner prod-like unico con credenziali effimere, build `--pull`, verifica Flyway, sicurezza, osservabilita, Playwright, backup/restore e controllo dei residui Docker.
+- Esecuzione prod-like settimanale in GitHub Actions con timeout e artefatto diagnostico pubblicato anche in caso di errore.
+- ADR e proposta architetturale multi-tenant con distinzione tra tenant, azienda legale, sede e magazzino, isolamento RLS, modello ibrido pooled/dedicato e migrazione expand/contract.
+- ADR e proposta architetturale separata per privacy, retention, legal hold, conservazione elettronica e fatturazione elettronica tramite provider, con workflow, rollback e gate professionali.
+- ADR e proposta architetturale per lifecycle cliente, branding sicuro, provisioning pooled/dedicato e flotta release con artefatti immutabili, coorti ed expand/contract.
+- Governance documentale con roadmap, architettura, modello dominio, sicurezza, testing, deployment e registro rischi.
+- Backend Spring Boot con PostgreSQL, Flyway, profili `dev`, `test` e `prod`.
+- Contratto errori API stabile con codici applicativi e `requestId`.
+- Sessioni persistenti con token hashati, logout e cleanup sicurezza.
+- Protezione login con lockout persistente dopo tentativi falliti.
+- Ruoli e permessi granulari per catalogo, magazzino, ordini, documenti, account, audit e anagrafiche.
+- Audit log con origine richiesta, tipo entita e correlazione tramite `X-Request-Id`.
+- Paginazione e filtri server-side per catalogo, ordini, movimenti, audit e anagrafiche.
+- Workflow ordini con bozza, conferma, evasione e annullamento.
+- Stock riservato e disponibilita vendibile.
+- Documenti simulati con fattura simulata, nota credito simulata e snapshot cliente.
+- Anagrafiche clienti e fornitori.
+- Idempotenza per operazioni critiche tramite `Idempotency-Key`.
+- Bootstrap controllato del primo super admin.
+- Template `.env.example` e documentazione configurazione ambiente.
+- Checklist release.
+- Workflow GitHub Actions con hygiene repository, backend verify, frontend build e quality gate.
+- Documentazione CI/CD.
+- Workflow sicurezza con dependency review, audit npm, inventory Maven e CodeQL.
+- Configurazione Dependabot per Maven, npm e GitHub Actions.
+- Documentazione delle scansioni sicurezza.
+- Dockerfile backend e frontend con build multi-stage.
+- Stack Docker prod-like con PostgreSQL, backend, frontend Nginx e health check.
+- Documentazione Docker prod-like.
+- Script backup e restore PostgreSQL con verifica automatica su database isolato.
+- Documentazione dedicata a backup, restore e accesso PostgreSQL.
+- Endpoint protetto `/api/system/status` con stato applicazione, database, runtime, sessioni, audit ed errori API recenti.
+- Vista frontend Monitoraggio per super admin con riepilogo operativo e anomalie recenti.
+- Stato prodotto `discontinued` con endpoint di disattivazione e indicazione frontend nel catalogo.
+- Password policy backend centralizzata e applicata a registrazione pubblica e creazione account amministrativa.
+- Vincolo database sui documenti simulati per impedire fatture o note credito duplicate sullo stesso ordine.
+- Vincoli database essenziali su campi business critici: quantita, prezzi, sconti, totali, aliquote e campi obbligatori.
+- Endpoint `/api/documents` paginato con filtri `q` e `type`.
+- Endpoint `/api/accounts` paginato con filtri `q` e `role`.
+- Query repository dedicata per scorte basse basate sulla disponibilita vendibile.
+- Endpoint `/api/dashboard` con statistiche aggregate, ultimi ordini e movimenti recenti filtrati per permessi.
+- Endpoint `/api/products/lookup` con dati catalogo leggeri per filtri e select del frontend.
+- Clock applicativo UTC centralizzato tramite `TimeProvider`.
+- Pagine React separate per autenticazione, dashboard, catalogo, anagrafiche, magazzino, ordini, documenti, account, audit e monitoraggio.
+- Shell workspace e navigazione a schede isolate in componenti e hook dedicati.
+- Client API React separati per catalogo, anagrafiche, account, magazzino, ordini, documenti, audit, dashboard e monitoraggio.
+- Suite frontend con Vitest, jsdom e React Testing Library per componenti, trasporto HTTP e flussi API critici.
+- Suite Playwright Chromium con smoke test browser sullo stack Docker reale e script locale isolato.
+- Modello pagamento ordine strutturato con metodo controllato, stato, importi, valuta, timestamp e relazione uno-a-uno persistita.
+- Migrazione Flyway `V15` con backfill dei metodi pagamento storici e vincoli database sugli importi e sugli stati.
+- Verifica Spring Modulith sui moduli business `user`, `product`, `partner`, `inventory`, `order` e `document`.
+- Porta `ProductOrderUsage` per rimuovere la dipendenza del catalogo dal repository ordini.
+- Build Maven web-first dalla root e build Swing separata tramite `pom-legacy.xml`.
+- Ledger immutabile `payment_transactions` per incassi e rimborsi con codici sequenziali, operatore, causale e riferimento.
+- Workflow resi con richiesta, approvazione, rifiuto, ricezione, rimborso parziale/completo e reintegro magazzino.
+- Migrazione Flyway `V16` con tabelle resi, righe reso, movimenti finanziari e vincoli sui saldi.
+- Scheda operativa ordini frontend con saldi, storico movimenti, incassi e gestione resi.
+- Modulo `company` con configurazione aziendale centralizzata, aliquota IVA predefinita e controllo di versione.
+- Migrazione Flyway `V17` con configurazione aziendale, contatori documentali annuali e snapshot dell'emittente.
+- Numerazioni documentali atomiche distinte per tipo ed esercizio, con prefissi e padding configurabili prima dell'utilizzo.
+- Pagina frontend amministrativa per identita aziendale, contatti, IVA e anteprima numerazioni.
+- Modulo `reporting` con report vendite e magazzino filtrati lato server tramite porte read-only dei domini ordini e prodotti.
+- Export CSV UTF-8, workbook Excel `.xlsx` e PDF landscape con limite esplicito di 10.000 righe.
+- Pagina React Report con metriche, dettagli, top prodotti, filtri ed export responsive.
+- Manuale utente operativo con matrice permessi, procedure per ruolo, workflow ordini/pagamenti/resi, gestione errori e limiti dichiarati.
+- Rate limiting Nginx per IP sull'endpoint login, con soglie configurabili, risposta JSON `429`, `Retry-After` e correlation ID.
+- Script `verify-login-rate-limit.sh` integrato negli smoke test e nella CI con verifica degli header e dei log Nginx.
+- Migrazione Flyway `V18` con ultima attivita persistita per le sessioni esistenti.
+- Rinnovo sessione autenticato con rotazione atomica del token e revoca immediata del precedente.
+- Timeout assoluto e di inattivita configurabili, con aggiornamento periodico dell'ultima attivita.
+- Metriche amministrative delle sessioni allineate al timeout di inattivita.
+- ADR 0004 sulla scelta tra header token e cookie HttpOnly/CSRF per il deployment browser-first.
+- CSP Nginx in enforcement senza `unsafe-inline` o `unsafe-eval`, con script, stili, connessioni e risorse limitati alla stessa origine.
+- Header browser uniformi per framing, isolamento origine, referrer, MIME sniffing e funzionalita sensibili.
+- Script `verify-browser-security.sh` integrato nello smoke locale e nella CI per validare CSP, API proxy e caching.
+- Probe Actuator separate per liveness e readiness, con readiness collegata allo stato del database.
+- Script `verify-actuator-exposure.sh` e controlli CI per impedire l'esposizione Actuator sulla porta API.
+- Errore API strutturato `404 RESOURCE_NOT_FOUND` per rotte inesistenti, senza falsa segnalazione di errore interno.
+- Resolver fail-closed per secret diretti o file-based, immagini backend/PostgreSQL dedicate e override Compose con mount read-only.
+- Verifica automatica dell'assenza di password dirette nella configurazione container e scansione Gitleaks della storia Git.
+- Procedura operativa per rotazione, rollback e rimozione del secret bootstrap.
+- Runtime container non-root per PostgreSQL, backend Java e frontend Nginx su porta non privilegiata.
+- Root filesystem read-only, `no-new-privileges`, capability Linux eliminate e scritture confinate a tmpfs e volume PostgreSQL.
+- Verifica automatica `verify-container-hardening.sh` integrata nello smoke test e nella CI.
+- Backup PostgreSQL atomici con checksum SHA-256, lock anti-concorrenza, retention e controllo di freschezza.
+- Timer systemd persistenti per backup giornaliero e restore drill settimanale dell'ultimo backup reale.
+- Verifiche automatiche del lifecycle backup e della configurazione dei timer integrate nella CI.
+- Log backend JSON in produzione con servizio, ambiente, correlation ID, metodo, percorso, stato e durata.
+- Metriche Prometheus JVM, HTTP, datasource e contatori applicativi per autenticazione, sessioni ed errori API.
+- Servizio Prometheus prod-like opzionale con retention configurabile, hardening non-root e accesso host limitato a loopback.
+- Regole alert per indisponibilita backend, frequenza 5xx, login anomali, pressione heap e saturazione pool database.
+- Script di validazione Prometheus, verifica runtime di log/metriche/alert e controllo hardening integrati nella CI.
+- Runbook operativo `docs/OBSERVABILITY.md`.
+
+### Modificato
+
+- Migrazione progressiva dal gestionale Swing verso una web app modulare.
+- Separazione tra profili locali e produzione.
+- Rimozione di dati operativi derivabili dal client nei payload critici.
+- Documentazione di deployment aggiornata con bootstrap super admin e variabili ambiente.
+- Test backend resi piu riproducibili configurando Mockito tramite Byte Buddy agent in Maven Surefire.
+- Ciclo di vita prodotti reso piu sicuro: codice bloccato dopo uso in ordini, cancellazione impedita con stock riservato o ordini collegati, prodotti disattivati non acquistabili.
+- Duplicati documentali tradotti in `409 RESOURCE_CONFLICT` con errore API stabile.
+- Password locale di bootstrap sviluppo/test aggiornata a `RootSecure123!`.
+- Modello dati rafforzato con check constraint su prodotti, ordini, righe ordine, movimenti magazzino, documenti simulati, righe documento e anagrafiche.
+- Vista frontend Documenti aggiornata con ricerca, filtro tipo e controlli di paginazione.
+- Vista frontend Account aggiornata con ricerca, filtro ruolo e controlli di paginazione.
+- Dashboard frontend aggiornata per leggere il conteggio scorte basse da query server-side.
+- Dashboard frontend collegata alla risposta aggregata backend.
+- Caricamento iniziale frontend alleggerito: usa dashboard aggregata, lookup prodotti e pagine correnti invece di scaricare tutte le liste operative complete.
+- Mapping JPA di ordini e documenti resi piu efficienti: righe collegate lazy con batch loading e back-reference `ManyToOne` lazy.
+- Timestamp backend standardizzati: ordini, documenti, movimenti, audit, idempotenza, anagrafiche, sessioni, errori API e monitoraggio usano la sorgente temporale applicativa UTC.
+- Frontend rifattorizzato: `App.tsx` mantiene orchestrazione e workflow, mentre pagine, layout, componenti condivisi, tipi UI e formattatori sono moduli separati.
+- Trasporto HTTP frontend centralizzato con gestione condivisa di token, errori, request id, paginazione completa e chiavi di idempotenza.
+- Layout frontend reso fluido senza larghezza minima globale, con breakpoint progressivi per notebook, tablet e viewport mobili e tabelle confinate in contenitori scrollabili.
+- Dipendenze frontend fissate a versioni esplicite e strumenti di build spostati tra le dev dependency.
+- CI estesa con build e verifica dello stack Docker prod-like.
+- CI estesa con verifica backup/restore PostgreSQL.
+- CI frontend estesa con esecuzione di `npm test` prima della build.
+- CI prod-like estesa con typecheck E2E, smoke test browser e artefatti diagnostici Playwright.
+- Script E2E reso riproducibile con ricreazione del solo volume PostgreSQL dedicato e avvio sequenziale di backend e frontend per preservare i log di errore.
+- Script E2E corretto per ricostruire sempre anche l'immagine frontend prima degli smoke test.
+- Login frontend corretto per mostrare l'errore di autenticazione senza aprire il rinnovo sessione quando non esiste ancora un utente autenticato.
+- Checkout frontend aggiornato con scelta tra carta, bonifico bancario e contanti; la vista ordini mostra separatamente metodo e stato pagamento.
+- API ordini arricchita con dettaglio pagamento, mantenendo il campo testuale storico come snapshot compatibile.
+- Documentazione principale riscritta in ottica web-first con confini modulari e strategia di dismissione Swing espliciti.
+- Documenti simulati aggiornati per usare IVA configurata e conservare snapshot immutabili di emittente, cliente e aliquota.
+- Backend dello stack prod-like pubblicato solo su loopback per impedire il bypass remoto del reverse proxy.
+- Immagine frontend aggiornata con template Nginx runtime e validazione della configurazione durante la build.
+- Nginx reso autoritativo sugli header browser, eliminando valori duplicati provenienti dal backend.
+- Cache frontend differenziata: shell HTML `no-store` e asset Vite versionati `immutable`.
+- Campi credenziali frontend allineati agli scopi `username`, `current-password` e `new-password`.
+- Actuator produzione spostato sulla porta management interna `9090`, limitato a `health` e configurato senza dettagli operativi.
+- Nginx frontend spostato internamente sulla porta non privilegiata `8080` con entrypoint runtime non-root e validazione fail-closed delle soglie login.
+
+### Sicurezza
+
+- Password hashate con BCrypt.
+- Registrazione pubblica limitata a ruoli non amministrativi.
+- Creazione admin riservata al super admin.
+- Blocco autocancellazione account corrente.
+- Blocco credenziali locali di default nel bootstrap produzione.
+- Validazione password forte per bootstrap produzione.
+- Validazione password forte applicata lato backend alla creazione degli account.
+- Vincolo database a protezione da duplicati concorrenti nei documenti simulati.
+- Scadenze sessione, lockout login, errori API e audit generati tramite clock applicativo centralizzato.
+- Login e rinnovo sessione protetti da header `no-store`/`no-cache`; token sovradimensionati rifiutati prima dell'hashing.
+- Metodi e stati pagamento limitati da enum applicative e check constraint database; annullamento consentito direttamente solo per pagamenti pendenti.
+- Permessi distinti `RECORD_PAYMENTS`, `REFUND_PAYMENTS`, `REQUEST_RETURNS` e `MANAGE_RETURNS`; endpoint finanziari e resi protetti, idempotenti e auditati.
+- Permesso `MANAGE_COMPANY_SETTINGS` riservato al super admin; aggiornamenti configurazione auditati e protetti da versione ottimistica.
+- Permesso `VIEW_REPORTS`, audit dedicato degli export, protezione CSV da Formula Injection e header download `no-store`/`nosniff`.
+- Difesa login a due livelli: limite per IP sul reverse proxy e lockout persistente per username nel backend.
+- Framing, plugin, script e stili inline bloccati dalla CSP; permessi browser non necessari disabilitati.
+- Endpoint Actuator generici, informativi e metrici negati anche agli utenti autenticati; soltanto liveness e readiness sono pubbliche sul management plane interno.
+- Dipendenza transitiva PostCSS aggiornata a `8.5.23` per correggere l'advisory sulla lettura delle source map.
+
+### Verifiche
+
+- Test backend attuali: 154, verificati localmente con Java 23 tramite `mvn -pl web/backend clean verify`.
+- Test Swing legacy attuali: 41, verificati tramite `mvn -f pom-legacy.xml test`.
+- Test frontend attuali: 32 in 11 file, verificati tramite `npm test`.
+- Smoke test browser attuali: 3, verificati con Chromium contro PostgreSQL, Spring Boot e Nginx/React reali, inclusa l'assenza di violazioni CSP.
+- Build frontend verificata con `npm run build`.
+- Workflow locale equivalente alla CI verificato su backend e frontend.
+- Audit npm frontend verificato senza vulnerabilita note.
+- Backend e frontend verificati localmente nello stack prod-like con Actuator isolato, probe interne, CSP, rate limiting e flussi browser completi.
+- Runner prod-like ricorrente verificato integralmente con 18 migrazioni Flyway, Prometheus, 3 smoke Playwright, backup/restore e cleanup Docker senza risorse residue.
+- PostgreSQL, backend e frontend verificati con UID non-root, root filesystem read-only, `no-new-privileges`, capability eliminate e mount scrivibili confinati.
+- Backup e restore PostgreSQL verificati su database isolato.
+- Checksum corrotto, lock concorrente, retention, freschezza e unita systemd verificati con test shell dedicati.
+- Audit npm verificato con zero vulnerabilita dopo l'aggiornamento PostCSS.
+- Monitoraggio sistema verificato con test autorizzativi backend.

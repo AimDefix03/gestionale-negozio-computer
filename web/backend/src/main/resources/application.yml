@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gestionale-api
+  profiles:
+    default: dev
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+
+logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-}]"
+
+gestionale:
+  security:
+    session-duration-minutes: 45
+    session-idle-timeout-minutes: 30
+    session-touch-interval-seconds: 60
+    cleanup-delay-ms: 900000
+    cleanup-initial-delay-ms: 900000
+    session-retention-days: 7
+    login-attempt-retention-hours: 24
+  bootstrap:
+    super-admin:
+      enabled: false
+      username:
+      password:
