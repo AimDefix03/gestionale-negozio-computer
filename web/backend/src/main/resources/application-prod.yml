@@ -1,0 +1,60 @@
+spring:
+  datasource:
+    url: ${GESTIONALE_DB_URL}
+    driver-class-name: org.postgresql.Driver
+    username: ${GESTIONALE_DB_USERNAME}
+    password: ${GESTIONALE_DB_PASSWORD}
+  h2:
+    console:
+      enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    clean-disabled: true
+
+gestionale:
+  bootstrap:
+    super-admin:
+      enabled: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED:false}
+      username: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME:}
+      password: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD:}
+
+management:
+  server:
+    port: ${GESTIONALE_MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: production
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      add:
+        service: ${spring.application.name}
+        environment: production

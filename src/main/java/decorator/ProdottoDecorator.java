@@ -7,7 +7,7 @@ public abstract class ProdottoDecorator extends Prodotto {
 
     public ProdottoDecorator(Prodotto prodotto) {
         super(prodotto.getCodice(), prodotto.getNome(), prodotto.getDescrizione(),
-                prodotto.getCategoria(), prodotto.getUtilizzo(), prodotto.getQuantita(),
+                prodotto.getCategoria(), prodotto.getBrand(), prodotto.getTipoProdotto(), prodotto.getUtilizzo(), prodotto.getQuantita(),
                 prodotto.getCosto(), prodotto.getSconto());
         this.prodottoDecorato = prodotto;
     }
@@ -30,6 +30,16 @@ public abstract class ProdottoDecorator extends Prodotto {
     @Override
     public String getUtilizzo() {
         return prodottoDecorato.getUtilizzo();
+    }
+
+    @Override
+    public String getBrand() {
+        return prodottoDecorato.getBrand();
+    }
+
+    @Override
+    public String getTipoProdotto() {
+        return prodottoDecorato.getTipoProdotto();
     }
 
     @Override

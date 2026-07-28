@@ -1,0 +1,47 @@
+groups:
+  - name: gestionale-availability
+    rules:
+      - alert: GestionaleBackendUnavailable
+        expr: up{job="gestionale-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backend gestionale non disponibile
+          description: Prometheus non riesce a raccogliere metriche dal backend da almeno due minuti.
+
+      - alert: GestionaleElevatedServerErrors
+        expr: sum(rate(gestionale_api_errors_total{status=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Frequenza errori server elevata
+          description: Il backend produce piu di 0,1 errori HTTP 5xx al secondo da almeno cinque minuti.
+
+      - alert: GestionaleRepeatedLoginFailures
+        expr: sum(increase(gestionale_authentication_attempts_total{outcome=~"invalid_credentials|locked"}[10m])) > 20
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Tentativi di accesso anomali
+          description: Sono stati rilevati piu di venti tentativi di autenticazione falliti o bloccati in dieci minuti.
+
+      - alert: GestionaleJvmHeapPressure
+        expr: sum(jvm_memory_used_bytes{job="gestionale-backend",area="heap"}) / sum(jvm_memory_max_bytes{job="gestionale-backend",area="heap"}) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pressione memoria JVM elevata
+          description: L'heap JVM supera stabilmente l'85 percento della capacita massima.
+
+      - alert: GestionaleDatabasePoolSaturation
+        expr: hikaricp_connections_active{job="gestionale-backend"} / hikaricp_connections_max{job="gestionale-backend"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Pool connessioni database quasi saturo
+          description: Le connessioni Hikari attive superano stabilmente l'85 percento del limite.

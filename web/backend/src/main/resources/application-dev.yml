@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: ${GESTIONALE_DB_URL:jdbc:postgresql://localhost:5432/gestionale}
+    driver-class-name: org.postgresql.Driver
+    username: ${GESTIONALE_DB_USERNAME:gestionale}
+    password: ${GESTIONALE_DB_PASSWORD:gestionale_dev_password}
+  h2:
+    console:
+      enabled: false
+  flyway:
+    clean-disabled: true
+
+gestionale:
+  bootstrap:
+    super-admin:
+      enabled: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED:${GESTIONALE_SEED_ADMIN_ENABLED:true}}
+      username: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME:${GESTIONALE_SEED_ADMIN_USERNAME:admin}}
+      password: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD:${GESTIONALE_SEED_ADMIN_PASSWORD:RootSecure123!}}

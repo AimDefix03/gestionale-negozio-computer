@@ -1,0 +1,24 @@
+[Unit]
+Description=Restore drill PostgreSQL Gestionale Negozio Computer
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=gestionale-backup
+Group=gestionale-backup
+SupplementaryGroups=docker
+WorkingDirectory=/opt/gestionale
+Environment=ENV_FILE=/etc/gestionale/backup.env
+Environment=BACKUP_DIR=/var/backups/gestionale
+ExecStart=/opt/gestionale/scripts/db/restore-drill-latest.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/gestionale
+LockPersonality=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
