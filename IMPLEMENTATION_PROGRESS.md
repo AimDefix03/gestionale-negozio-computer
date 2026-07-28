@@ -14,7 +14,7 @@
 
 | Step | Stato | Commit/patch | Test | Note |
 |---|---|---|---|---|
-| 0.1 | COMPLETED | `9f9e23a` baseline; `945fcd0` CI; `62a8d14` security; `fa52524` gate finali | clone pulito: backend 154/154; frontend 32/32; legacy 41/41; CI e security remote verdi | PR #2 aperta in draft; `main` protetta con backend, frontend, migration e quality gate obbligatori |
+| 0.1 | COMPLETED | `9f9e23a` baseline; `945fcd0` CI; `62a8d14` security; `fa52524` gate finali; `8d9be88` hardening CodeQL | backend 155/155; frontend 32/32; legacy 41/41; CI, security e code scanning remoti verdi | PR #2 aperta in draft; `main` protetta con backend, frontend, migration e quality gate obbligatori |
 | 0.2 | PENDING | - | - | Congelare scope e nuove feature |
 | 0.3 | PENDING | - | - | Fixture anonimizzate e dati di test realistici |
 | 1.1 | PENDING | - | - | Registrazione pubblica limitata a CUSTOMER |
@@ -90,9 +90,10 @@
 - Workflow CI pubblicato tramite sessione GitHub autenticata: commit `945fcd0`.
 - Workflow security pubblicato tramite sessione GitHub autenticata: commit `62a8d14`.
 - Workflow CI corretto per separare il gate migrazioni e sospendere l'esecuzione prod-like fino allo Step 1.5: commit `fa52524`.
+- Alert CodeQL corretti senza dismiss manuali: identificatori casuali generati con CSPRNG e CSRF abilitato per default con esclusioni esplicite per API stateless: commit `8d9be88`.
 - I commit locali originali sono preservati nelle branch `baseline-pre-publication-20260727` e `miglioramenti-gestionale-pre-publication`.
 - Clone pulito creato dal repository reale e verificato senza file esterni non documentati.
-- Backend nel clone pulito: `mvn -B verify`, 154 test passati, JAR generato.
+- Backend nel clone pulito: `mvn -B verify`, 154 test passati, JAR generato; dopo l'hardening CodeQL: 155 test passati.
 - Frontend nel clone pulito: `npm ci`; 32 test passati; typecheck applicativo ed E2E passati; build Vite passata.
 - Legacy nel clone pulito: `mvn -B -f pom-legacy.xml test`, 41 test passati.
 - Flyway: 18 migrazioni validate e applicate su schema H2 pulito durante i test.
@@ -103,8 +104,9 @@
 - Branch protection remota attiva su `main`: pull request obbligatoria, una approvazione, dismiss stale approvals, approvazione dell'ultimo push, conversazioni risolte, nessun bypass amministratore, force push e cancellazione disabilitati.
 - Pull request draft aperta: `#2`, branch `miglioramenti-gestionale` verso `main`.
 - Branch protection verificata con branch aggiornata obbligatoria e check richiesti: `Backend Spring Boot`, `Frontend React`, `Database migrations`, `Quality gate`.
-- Run CI remoto `30287620556`: repository hygiene, backend, frontend, migrazioni e quality gate completati con successo; prod-like correttamente saltato.
-- Run security remoto `30287620519`: Gitleaks, dependency review, npm audit, inventario dipendenze backend e CodeQL Java/TypeScript completati con successo.
+- Run CI remoto finale `30341354456`: repository hygiene, backend, frontend, migrazioni e quality gate completati con successo; prod-like correttamente saltato.
+- Run security remoto finale `30341354476`: Gitleaks, dependency review, npm audit, inventario dipendenze backend e CodeQL Java/TypeScript completati con successo.
+- Check separato `Code scanning results / CodeQL` completato con successo: nessun nuovo alert aperto nella pull request.
 - Dependency Graph del repository abilitato per rendere operativo il dependency review.
 
 ## Rischi residui
