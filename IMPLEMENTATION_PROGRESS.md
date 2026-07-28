@@ -2,11 +2,11 @@
 
 ## Stato generale
 
-- Current step: 0.1
-- Last completed step: none
+- Current step: none; awaiting authorization for Step 0.2
+- Last completed step: 0.1
 - Last update: 2026-07-27
 - Open P0: F-01, F-02, F-03
-- Open P1: F-04, F-05, F-06, F-07, F-08, F-09, F-10, F-11, F-12, F-13, F-14, F-15, F-16, F-17, F-18, F-19, F-20, F-20A
+- Open P1: F-04, F-05, F-06, F-07, F-08, F-09, F-10, F-11, F-12, F-13, F-14, F-15, F-16, F-17, F-18, F-19, F-20A
 - Open P2: F-21, F-22, F-23, F-24, F-25, F-26, F-27, F-28, F-29, F-30, F-31, F-31A, F-31B
 - Open P3: F-32, F-33, F-34
 
@@ -14,7 +14,7 @@
 
 | Step | Stato | Commit/patch | Test | Note |
 |---|---|---|---|---|
-| 0.1 | PARTIAL | `9f9e23a` baseline pubblicata; `945fcd0` CI; `62a8d14` security | clone pulito: backend 154/154; frontend 32/32; legacy 41/41; build e config Compose OK | Baseline e workflow pubblicati; PR, primo run CI e status check obbligatori ancora da completare |
+| 0.1 | COMPLETED | `9f9e23a` baseline; `945fcd0` CI; `62a8d14` security; `fa52524` gate finali | clone pulito: backend 154/154; frontend 32/32; legacy 41/41; CI e security remote verdi | PR #2 aperta in draft; `main` protetta con backend, frontend, migration e quality gate obbligatori |
 | 0.2 | PENDING | - | - | Congelare scope e nuove feature |
 | 0.3 | PENDING | - | - | Fixture anonimizzate e dati di test realistici |
 | 1.1 | PENDING | - | - | Registrazione pubblica limitata a CUSTOMER |
@@ -73,11 +73,12 @@
 - Nessuna nuova funzione commerciale prima della chiusura dei P0 e dei gate dipendenti.
 - Il 2026-07-27 e stato autorizzato il commit della baseline e la configurazione della branch protection su `main`.
 - Il 2026-07-27 e stato autorizzato il push della branch `miglioramenti-gestionale`.
+- Il 2026-07-27 e stata autorizzata l'apertura della pull request e il completamento remoto dello Step 0.1.
 
 ## Blocker
 
-- I workflow si attivano su pull request verso `main`; la creazione della PR richiede un'autorizzazione esplicita separata.
-- La branch protection remota e attiva su `main`, ma i required status check non sono selezionabili finche il workflow non produce i relativi contesti almeno una volta.
+- Nessun blocker aperto per lo Step 0.1.
+- Lo Step 0.2 non e iniziato e richiede autorizzazione esplicita.
 
 ## Verifiche Step 0.1
 
@@ -88,6 +89,7 @@
 - Baseline pubblicata su `origin/miglioramenti-gestionale`: commit `9f9e23a`.
 - Workflow CI pubblicato tramite sessione GitHub autenticata: commit `945fcd0`.
 - Workflow security pubblicato tramite sessione GitHub autenticata: commit `62a8d14`.
+- Workflow CI corretto per separare il gate migrazioni e sospendere l'esecuzione prod-like fino allo Step 1.5: commit `fa52524`.
 - I commit locali originali sono preservati nelle branch `baseline-pre-publication-20260727` e `miglioramenti-gestionale-pre-publication`.
 - Clone pulito creato dal repository reale e verificato senza file esterni non documentati.
 - Backend nel clone pulito: `mvn -B verify`, 154 test passati, JAR generato.
@@ -99,10 +101,15 @@
 - Runtime Maven verificato: Java 23.0.1 con compilazione `release 17`; il test della baseline passa anche su questo runtime.
 - Artifact CI backend, frontend e diagnostica prod-like includono `github.sha`.
 - Branch protection remota attiva su `main`: pull request obbligatoria, una approvazione, dismiss stale approvals, approvazione dell'ultimo push, conversazioni risolte, nessun bypass amministratore, force push e cancellazione disabilitati.
+- Pull request draft aperta: `#2`, branch `miglioramenti-gestionale` verso `main`.
+- Branch protection verificata con branch aggiornata obbligatoria e check richiesti: `Backend Spring Boot`, `Frontend React`, `Database migrations`, `Quality gate`.
+- Run CI remoto `30287620556`: repository hygiene, backend, frontend, migrazioni e quality gate completati con successo; prod-like correttamente saltato.
+- Run security remoto `30287620519`: Gitleaks, dependency review, npm audit, inventario dipendenze backend e CodeQL Java/TypeScript completati con successo.
+- Dependency Graph del repository abilitato per rendere operativo il dependency review.
 
 ## Rischi residui
 
-- F-20 e corretto nella baseline locale e remota, ma resta formalmente aperto finche la CI remota non passa e i relativi check non diventano obbligatori.
-- I risultati del clone pulito non sostituiscono una CI eseguita sul repository remoto.
-- La branch protection non impone ancora i contesti `Backend Spring Boot`, `Frontend React`, `Prod-like Docker stack` e `Quality gate`.
+- F-20 e chiuso: baseline reale, clone pulito, CI remota e protezione branch sono verificati.
+- Il gate migrazioni dello Step 0.1 usa H2 in modalita PostgreSQL; la suite PostgreSQL autorevole resta pianificata nello Step 2.9.
+- I controlli security sono verdi ma non sono inclusi tra i quattro status check obbligatori richiesti dallo Step 0.1.
 - Non eseguire i runner prod-like/E2E prima del completamento dello Step 1.5.
