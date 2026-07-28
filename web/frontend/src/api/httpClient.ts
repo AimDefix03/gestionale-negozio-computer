@@ -104,8 +104,14 @@ export function toQueryString(query: Record<string, string | number | boolean | 
 }
 
 function createRequestId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+  if (typeof cryptoApi?.getRandomValues !== 'function') {
+    throw new Error('Generatore crittografico non disponibile.');
+  }
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+  const randomPart = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return `web-${randomPart}`;
 }
 
 function requestHeaders(initial?: HeadersInit): Headers {

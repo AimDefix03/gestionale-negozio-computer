@@ -41,6 +41,14 @@ class AuthorizationSecurityTest {
     }
 
     @Test
+    void csrfProtectionRemainsEnabledOutsideStatelessApiRoutes() throws Exception {
+        mockMvc.perform(post("/browser-session-probe")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void availabilityProbesArePublicWithoutExposingDetails() throws Exception {
         mockMvc.perform(get("/actuator/health/liveness"))
                 .andExpect(status().isOk())

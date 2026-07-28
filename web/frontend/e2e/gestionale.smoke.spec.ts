@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { expect, Page, test } from '@playwright/test';
 
 const adminUsername = process.env.E2E_USERNAME ?? process.env.GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME;
 const adminPassword = process.env.E2E_PASSWORD ?? process.env.GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD;
-const runId = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+const runId = `${Date.now()}-${randomUUID()}`;
 const productCode = `E2E-${runId}`;
 const productName = `Prodotto E2E ${runId}`;
 const customerUsername = `e2e_customer_${runId}`;
