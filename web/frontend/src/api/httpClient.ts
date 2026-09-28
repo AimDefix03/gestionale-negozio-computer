@@ -133,8 +133,26 @@ export function parseDownloadFilename(contentDisposition: string | null, fallbac
     }
   }
 
-  const quoted = contentDisposition.match(/filename\s*=\s*"((?:\\.|[^"])*)"/i)?.[1];
-  if (quoted) return sanitizeFilename(quoted.replace(/\\(.)/g, '$1'), fallback);
+  const quotedPrefix = /(?:^|;)\s*filename\s*=\s*"/i.exec(contentDisposition);
+  if (quotedPrefix) {
+    let quoted = '';
+    let escaped = false;
+    const start = quotedPrefix.index + quotedPrefix[0].length;
+    for (let index = start; index < contentDisposition.length; index += 1) {
+      const character = contentDisposition[index];
+      if (escaped) {
+        quoted += character;
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        return sanitizeFilename(quoted, fallback);
+      } else {
+        quoted += character;
+      }
+    }
+    return sanitizeFilename(fallback);
+  }
 
   const plain = contentDisposition.match(/filename\s*=\s*([^;]+)/i)?.[1];
   return sanitizeFilename(plain ? stripQuotes(plain.trim()) : fallback, fallback);

@@ -190,6 +190,13 @@ describe('httpClient', () => {
     expect(sanitizeFilename('\u0000../')).toBe('_');
   });
 
+  it('gestisce in tempo lineare un filename quoted ostile e incompleto', () => {
+    const repeatedEscapes = String.raw`\!`.repeat(20_000);
+
+    expect(parseDownloadFilename(`attachment; filename="${repeatedEscapes}`, 'report.csv'))
+      .toBe('report.csv');
+  });
+
   it('collega temporaneamente il link prima del click e revoca il blob dopo il tick per WebKit', () => {
     vi.useFakeTimers();
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
