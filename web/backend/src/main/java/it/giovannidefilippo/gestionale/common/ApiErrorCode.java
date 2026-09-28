@@ -1,0 +1,14 @@
+package it.giovannidefilippo.gestionale.common;
+
+public enum ApiErrorCode {
+    AUTH_UNAUTHORIZED,
+    AUTH_FORBIDDEN,
+    REQUEST_INVALID,
+    REQUEST_MALFORMED,
+    VALIDATION_FAILED,
+    RESOURCE_NOT_FOUND,
+    RESOURCE_CONFLICT,
+    IDEMPOTENCY_CONFLICT,
+    IDEMPOTENCY_IN_PROGRESS,
+    INTERNAL_ERROR
+}

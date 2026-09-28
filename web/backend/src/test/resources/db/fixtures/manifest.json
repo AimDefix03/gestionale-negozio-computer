@@ -1,0 +1,181 @@
+{
+  "formatVersion": 1,
+  "dataPolicy": {
+    "classification": "synthetic-anonymized",
+    "validCredentials": false,
+    "allowedEmailSuffix": ".example.invalid"
+  },
+  "snapshots": [
+    {
+      "version": 14,
+      "base": "v14/base.sql",
+      "scenarios": [
+        "all-order-statuses",
+        "legacy-payment-methods",
+        "textual-order-ownership",
+        "reused-username-session",
+        "case-insensitive-collisions",
+        "inventory-ledger-drift",
+        "historical-documents",
+        "idempotency-in-progress"
+      ]
+    },
+    {
+      "version": 16,
+      "baseVersion": 14,
+      "delta": "v16/delta.sql",
+      "scenarios": [
+        "structured-payments",
+        "payment-transactions",
+        "return-workflow",
+        "paid-unfulfilled-order",
+        "financial-reconciliation-mismatch"
+      ]
+    },
+    {
+      "version": 18,
+      "baseVersion": 16,
+      "delta": "v18/delta.sql",
+      "scenarios": [
+        "session-activity",
+        "company-settings",
+        "legacy-document-numbering-collision",
+        "year-boundary-document"
+      ]
+    },
+    {
+      "version": 19,
+      "baseVersion": 18,
+      "scenarios": [
+        "self-service-operational-account-census",
+        "operational-session-revocation",
+        "security-evidence-preservation"
+      ]
+    },
+    {
+      "version": 20,
+      "baseVersion": 19,
+      "scenarios": [
+        "stable-session-account-subject",
+        "legacy-session-revocation",
+        "orphan-session-removal",
+        "account-session-delete-cascade"
+      ]
+    },
+    {
+      "version": 21,
+      "baseVersion": 20,
+      "scenarios": [
+        "stable-order-account-subject",
+        "deterministic-partner-code-migration",
+        "no-textual-account-inference",
+        "customer-snapshot-preservation",
+        "explicit-account-partner-linking"
+      ]
+    },
+    {
+      "version": 22,
+      "baseVersion": 21,
+      "scenarios": [
+        "historical-payment-quarantine",
+        "manual-payment-reconciliation-evidence",
+        "document-counter-max-plus-one",
+        "document-numbering-preflight"
+      ]
+    },
+    {
+      "version": 30,
+      "baseVersion": 22,
+      "remediation": "remediation/pre-v23-canonical-resolution.sql",
+      "scenarios": [
+        "populated-upgrade-v30",
+        "operator-approved-canonical-remediation",
+        "authoritative-inventory-baseline",
+        "durable-idempotency-claim",
+        "legacy-idempotency-lease-repair",
+        "cancellation-metadata",
+        "stable-financial-links",
+        "concurrent-login-attempt-merge",
+        "assisted-sales-customer-classification",
+        "order-line-description-snapshot"
+      ]
+    },
+    {
+      "version": 31,
+      "baseVersion": 30,
+      "scenarios": [
+        "populated-upgrade-v31",
+        "account-lifecycle-state",
+        "historical-account-enabled-default",
+        "account-lifecycle-consistency-constraint"
+      ]
+    },
+    {
+      "version": 32,
+      "baseVersion": 31,
+      "scenarios": [
+        "populated-upgrade-v32",
+        "company-iana-time-zone",
+        "legacy-document-utc-snapshot",
+        "time-zone-consistency-constraints"
+      ]
+    },
+    {
+      "version": 33,
+      "baseVersion": 32,
+      "scenarios": [
+        "populated-upgrade-v33",
+        "supplier-order-schema-addition",
+        "historical-data-not-inferred-as-purchases",
+        "supplier-order-state-and-quantity-constraints"
+      ]
+    },
+    {
+      "version": 34,
+      "baseVersion": 33,
+      "scenarios": [
+        "populated-upgrade-v34",
+        "historical-stock-cost-remains-unknown",
+        "legacy-supplier-receipt-posting-evidence",
+        "purchase-receipt-cost-and-ledger-constraints"
+      ]
+    },
+    {
+      "version": 35,
+      "baseVersion": 34,
+      "scenarios": [
+        "populated-upgrade-v35",
+        "no-historical-physical-inventory-inference",
+        "governed-count-approval-schema",
+        "physical-adjustment-ledger-link"
+      ]
+    }
+  ],
+  "findingCoverage": {
+    "F-01": ["v14:operational-self-registration-record", "v19:operational-account-quarantine"],
+    "F-02": ["v14:textual-order-ownership", "v14:case-colliding-customers", "v21:stable-order-account-subject", "v21:no-textual-account-inference"],
+    "F-05": ["v14:inventory-ledger-drift"],
+    "F-06": ["v14:revoked-and-active-sessions", "v20:legacy-session-revocation"],
+    "F-07": ["v14:reused-username-session", "v19:operational-session-revocation", "v20:stable-session-account-subject"],
+    "F-08": ["v16:paid-unfulfilled-order"],
+    "F-09": ["v18:legacy-document-counter-gap", "v22:document-counter-max-plus-one"],
+    "F-10": ["v14:legacy-paid-state-ambiguity", "v22:historical-payment-quarantine"],
+    "F-11": ["v14:case-insensitive-collisions"],
+    "F-13": ["v14:idempotency-in-progress"],
+    "F-20A": ["v14:draft-order-kpi-input", "v34:historical-stock-cost-remains-unknown"],
+    "F-15": ["v30:assisted-sales-customer-classification", "v30:order-line-description-snapshot"],
+    "F-21": ["v14", "v16", "v18", "v22:upgrade-path-verification", "v30:populated-upgrade-verification"],
+    "F-22": ["v16:financial-reconciliation-mismatch"],
+    "F-27": ["v18:year-boundary-document", "v32:company-iana-time-zone", "v32:legacy-document-utc-snapshot"],
+    "F-28": ["v14:case-colliding-login-attempts", "v29:deterministic-login-attempt-merge"],
+    "F-29": ["v14:historical-documents", "v32:legacy-document-utc-snapshot"],
+    "F-31": ["v14:all-order-statuses", "v16:return-workflow"],
+    "F-31A": ["v14:orphanable-session-subject", "v31:account-lifecycle-state", "v31:historical-account-enabled-default"],
+    "F-31B": ["v14:idempotency-in-progress"]
+  },
+  "volumeProfiles": {
+    "small": "profiles/small.properties",
+    "medium": "profiles/medium.properties",
+    "large": "profiles/large.properties"
+  }
+}

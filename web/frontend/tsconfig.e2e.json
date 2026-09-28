@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "types": ["node", "@playwright/test"],
+    "isolatedModules": false
+  },
+  "include": ["playwright.config.ts", "e2e/**/*.ts"],
+  "references": []
+}

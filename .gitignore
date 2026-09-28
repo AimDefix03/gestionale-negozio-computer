@@ -6,6 +6,35 @@
 # Build
 out/
 target/
+web/frontend/dist/
+web/frontend/node_modules/
+web/frontend/playwright-report/
+web/frontend/test-results/
+
+# Environment locali
+.env
+.env.*
+!.env.example
+!*.env.example
+!.env.docker.example
+web/backend/.env
+web/backend/.env.*
+!web/backend/.env.example
+web/frontend/.env
+web/frontend/.env.*
+!web/frontend/.env.example
 
 # File dati locali
 *.dat
+
+# Backup locali
+backups/
+*.dump
+*.dump.sha256
+*.dump.tmp
+*.backup
+
+# Segreti locali
+secrets/
+*.secret
+*.secret.txt

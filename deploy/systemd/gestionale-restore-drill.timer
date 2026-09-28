@@ -1,0 +1,12 @@
+[Unit]
+Description=Verifica settimanale restore PostgreSQL Gestionale
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=30m
+AccuracySec=1m
+Unit=gestionale-restore-drill.service
+
+[Install]
+WantedBy=timers.target
