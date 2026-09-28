@@ -39,14 +39,24 @@ interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Long>, Jp
 
     boolean existsByCodeIgnoreCase(String code);
 
-    long countByCustomerIgnoreCase(String customer);
+    long countByCustomerAccountId(Long customerAccountId);
 
-    @Query("select coalesce(sum(customerOrder.total), 0) from CustomerOrder customerOrder")
-    BigDecimal sumTotal();
+    long countByCustomerAccountIdAndStatus(Long customerAccountId, OrderStatus status);
 
-    @Query("select coalesce(sum(customerOrder.total), 0) from CustomerOrder customerOrder where lower(customerOrder.customer) = lower(:customer)")
-    BigDecimal sumTotalByCustomer(@Param("customer") String customer);
+    long countByStatus(OrderStatus status);
+
+    @Query("select coalesce(sum(customerOrder.total), 0) from CustomerOrder customerOrder where customerOrder.status = :status")
+    BigDecimal sumTotalByStatus(@Param("status") OrderStatus status);
+
+    @Query("select coalesce(sum(payment.paidAmount), 0) from CustomerOrder customerOrder join customerOrder.payment payment")
+    BigDecimal sumGrossCollected();
+
+    @Query("select coalesce(sum(payment.refundedAmount), 0) from CustomerOrder customerOrder join customerOrder.payment payment")
+    BigDecimal sumRefunded();
+
+    @Query("select coalesce(sum(customerOrder.total), 0) from CustomerOrder customerOrder where customerOrder.customerAccountId = :customerAccountId")
+    BigDecimal sumTotalByCustomerAccountId(@Param("customerAccountId") Long customerAccountId);
 
     @EntityGraph(attributePaths = "payment")
-    List<CustomerOrder> findByCustomerIgnoreCase(String customer);
+    List<CustomerOrder> findByCustomerAccountId(Long customerAccountId);
 }

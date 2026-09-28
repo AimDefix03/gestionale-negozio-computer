@@ -2,8 +2,8 @@ spring:
   datasource:
     url: ${GESTIONALE_DB_URL}
     driver-class-name: org.postgresql.Driver
-    username: ${GESTIONALE_DB_USERNAME}
-    password: ${GESTIONALE_DB_PASSWORD}
+    username: ${GESTIONALE_DB_RUNTIME_USERNAME}
+    password: ${GESTIONALE_DB_RUNTIME_PASSWORD}
   h2:
     console:
       enabled: false
@@ -12,6 +12,10 @@ spring:
       ddl-auto: validate
     open-in-view: false
   flyway:
+    url: ${GESTIONALE_DB_URL}
+    user: ${GESTIONALE_DB_MIGRATOR_USERNAME}
+    password: ${GESTIONALE_DB_MIGRATOR_PASSWORD}
+    init-sqls: SET ROLE ${GESTIONALE_DB_OWNER_USERNAME}
     clean-disabled: true
 
 gestionale:

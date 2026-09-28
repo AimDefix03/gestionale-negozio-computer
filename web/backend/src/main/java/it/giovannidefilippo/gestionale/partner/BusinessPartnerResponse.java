@@ -1,6 +1,8 @@
 package it.giovannidefilippo.gestionale.partner;
 
-import java.time.LocalDateTime;
+import it.giovannidefilippo.gestionale.common.BusinessTime;
+
+import java.time.OffsetDateTime;
 
 public record BusinessPartnerResponse(
         Long id,
@@ -15,9 +17,10 @@ public record BusinessPartnerResponse(
         String address,
         String city,
         String notes,
+        Long linkedAccountId,
         boolean active,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
     static BusinessPartnerResponse from(BusinessPartner partner) {
         return new BusinessPartnerResponse(
@@ -33,9 +36,10 @@ public record BusinessPartnerResponse(
                 partner.getAddress(),
                 partner.getCity(),
                 partner.getNotes(),
+                partner.getLinkedAccountId(),
                 partner.isActive(),
-                partner.getCreatedAt(),
-                partner.getUpdatedAt()
+                BusinessTime.utcOffset(partner.getCreatedAt()),
+                BusinessTime.utcOffset(partner.getUpdatedAt())
         );
     }
 }

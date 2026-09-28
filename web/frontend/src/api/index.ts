@@ -5,6 +5,7 @@ export * from './partnerClient';
 export * from './accountClient';
 export * from './inventoryClient';
 export * from './orderClient';
+export * from './purchaseClient';
 export * from './documentClient';
 export * from './auditClient';
 export * from './dashboardClient';

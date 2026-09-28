@@ -26,22 +26,30 @@ class UserController {
     private final AuthSessionService authSessionService;
     private final PasswordStrengthService passwordStrengthService;
     private final OperationalMetrics operationalMetrics;
+    private final AccountSecurityReviewService accountSecurityReviewService;
 
-    UserController(UserService userService, AuthSessionService authSessionService, PasswordStrengthService passwordStrengthService, OperationalMetrics operationalMetrics) {
+    UserController(
+            UserService userService,
+            AuthSessionService authSessionService,
+            PasswordStrengthService passwordStrengthService,
+            OperationalMetrics operationalMetrics,
+            AccountSecurityReviewService accountSecurityReviewService
+    ) {
         this.userService = userService;
         this.authSessionService = authSessionService;
         this.passwordStrengthService = passwordStrengthService;
         this.operationalMetrics = operationalMetrics;
+        this.accountSecurityReviewService = accountSecurityReviewService;
     }
 
     @PostMapping("/login")
     AuthSessionResponse login(@Valid @RequestBody UserRequests.LoginRequest request, HttpServletResponse response) {
         try {
             authSessionService.assertLoginAllowed(request.username());
-            UserResponse user = userService.login(request.username(), request.password(), request.role());
+            UserResponse authentication = userService.login(request.username(), request.password());
             authSessionService.clearFailedLogin(request.username());
             preventCaching(response);
-            AuthSessionResponse session = authSessionService.create(user);
+            AuthSessionResponse session = authSessionService.create(authentication);
             operationalMetrics.recordAuthentication(OperationalMetrics.AuthenticationOutcome.SUCCESS);
             return session;
         } catch (IllegalArgumentException exception) {
@@ -83,7 +91,7 @@ class UserController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     UserResponse register(@Valid @RequestBody UserRequests.RegisterRequest request) {
-        return userService.registerPublic(request.username(), request.password(), request.role());
+        return userService.registerPublic(request.username(), request.password());
     }
 
     @GetMapping
@@ -92,10 +100,31 @@ class UserController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size,
             @RequestParam(required = false) String q,
-            @RequestParam(required = false) UserRole role
+            @RequestParam(required = false) UserRole role,
+            @RequestParam(required = false) Boolean enabled
     ) {
         authSessionService.requireManageAccounts(token);
-        return userService.search(q, role, page, size);
+        return userService.search(q, role, enabled, page, size);
+    }
+
+    @GetMapping("/security-review")
+    AccountSecurityReviewReport securityReview(
+            @RequestHeader(value = "X-Session-Token", required = false) String token
+    ) {
+        authSessionService.requireSuperAdmin(token);
+        return accountSecurityReviewService.report();
+    }
+
+    @PostMapping("/security-review/{username}/verify")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void verifyOperationalAccount(
+            @PathVariable String username,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword
+    ) {
+        AuthenticatedUser actor = authSessionService.requireSuperAdmin(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        accountSecurityReviewService.verifyOperationalAccount(username, actor.username());
     }
 
     @PostMapping
@@ -108,6 +137,77 @@ class UserController {
         AuthenticatedUser actor = authSessionService.requireManageAccounts(token);
         requirePasswordConfirmation(actor, reauthPassword);
         return userService.createAccount(request.username(), request.password(), request.role(), actor.username(), "Creazione da pannello admin");
+    }
+
+    @PostMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changeOwnPassword(
+            @Valid @RequestBody UserRequests.ChangePasswordRequest request,
+            Authentication authentication
+    ) {
+        userService.changeOwnPassword(authentication.getName(), request.currentPassword(), request.newPassword());
+    }
+
+    @PostMapping("/{username}/disable")
+    UserResponse disable(
+            @PathVariable String username,
+            @Valid @RequestBody UserRequests.AccountStateRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword
+    ) {
+        AuthenticatedUser actor = authSessionService.requireManageAccounts(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        return userService.disable(username, request.reason(), actor.username());
+    }
+
+    @PostMapping("/{username}/enable")
+    UserResponse enable(
+            @PathVariable String username,
+            @Valid @RequestBody UserRequests.AccountStateRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword
+    ) {
+        AuthenticatedUser actor = authSessionService.requireManageAccounts(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        return userService.enable(username, request.reason(), actor.username());
+    }
+
+    @PostMapping("/{username}/password-reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resetPassword(
+            @PathVariable String username,
+            @Valid @RequestBody UserRequests.ResetPasswordRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword
+    ) {
+        AuthenticatedUser actor = authSessionService.requireManageAccounts(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        userService.resetPassword(username, request.newPassword(), request.reason(), actor.username());
+    }
+
+    @PostMapping("/{username}/sessions/revoke")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void revokeSessions(
+            @PathVariable String username,
+            @Valid @RequestBody UserRequests.RevokeSessionsRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword
+    ) {
+        AuthenticatedUser actor = authSessionService.requireManageAccounts(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        userService.revokeSessions(username, request.reason(), actor.username());
+    }
+
+    @PostMapping("/{username}/role")
+    UserResponse changeRole(
+            @PathVariable String username,
+            @Valid @RequestBody UserRequests.ChangeRoleRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword
+    ) {
+        AuthenticatedUser actor = authSessionService.requireSuperAdmin(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        return userService.changeRole(username, request.role(), request.reason(), actor.username());
     }
 
     @DeleteMapping("/{username}")

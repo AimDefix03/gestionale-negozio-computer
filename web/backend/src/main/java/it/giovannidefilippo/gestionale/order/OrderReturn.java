@@ -121,16 +121,16 @@ public class OrderReturn {
         updatedAt = changedAt;
     }
 
-    void registerRefund(BigDecimal amount, LocalDateTime changedAt) {
+    void synchronizeRefundedAmount(BigDecimal ledgerRefundedAmount, LocalDateTime changedAt) {
         if (status != OrderReturnStatus.RECEIVED && status != OrderReturnStatus.PARTIALLY_REFUNDED) {
             throw new IllegalStateException("Puoi rimborsare solo un reso ricevuto.");
         }
-        BigDecimal value = positiveMoney(amount);
-        if (value.compareTo(getRefundableAmount()) > 0) {
-            throw new IllegalArgumentException("Il rimborso supera il valore residuo del reso.");
+        BigDecimal value = money(ledgerRefundedAmount);
+        if (value.compareTo(totalAmount) > 0) {
+            throw new IllegalArgumentException("Il totale rimborsato supera il valore del reso.");
         }
-        refundedAmount = refundedAmount.add(value).setScale(2, RoundingMode.HALF_UP);
-        status = refundedAmount.compareTo(totalAmount) == 0 ? OrderReturnStatus.REFUNDED : OrderReturnStatus.PARTIALLY_REFUNDED;
+        refundedAmount = value;
+        status = value.compareTo(totalAmount) == 0 ? OrderReturnStatus.REFUNDED : OrderReturnStatus.PARTIALLY_REFUNDED;
         updatedAt = Objects.requireNonNull(changedAt);
     }
 
@@ -141,6 +141,7 @@ public class OrderReturn {
         return items.stream().filter(item -> item.getProductCode().equalsIgnoreCase(productCode)).mapToInt(OrderReturnItem::getQuantity).sum();
     }
 
+    public Long getId() { return id; }
     public String getCode() { return code; }
     public OrderReturnStatus getStatus() { return status; }
     public String getReason() { return reason; }
@@ -180,6 +181,14 @@ public class OrderReturn {
         BigDecimal amount = Objects.requireNonNull(value).setScale(2, RoundingMode.HALF_UP);
         if (amount.signum() <= 0) {
             throw new IllegalArgumentException("L'importo deve essere maggiore di zero.");
+        }
+        return amount;
+    }
+
+    private static BigDecimal money(BigDecimal value) {
+        BigDecimal amount = Objects.requireNonNull(value).setScale(2, RoundingMode.HALF_UP);
+        if (amount.signum() < 0) {
+            throw new IllegalArgumentException("L'importo non puo essere negativo.");
         }
         return amount;
     }

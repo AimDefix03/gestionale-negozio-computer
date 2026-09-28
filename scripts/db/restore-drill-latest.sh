@@ -34,9 +34,10 @@ BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-26}" \
   "$SCRIPT_DIR/check-backup-freshness.sh" "$backup_file" >/dev/null
 
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/gestionale-restore-drill.XXXXXX")
-secret_file="$work_dir/database-password"
-printf '%s' "$(openssl rand -hex 32)" > "$secret_file"
-chmod 0444 "$secret_file"
+for identity in bootstrap migrator runtime backup restore; do
+  printf '%s' "$(openssl rand -hex 32)" > "$work_dir/database-$identity-password"
+done
+chmod 0444 "$work_dir"/database-*-password
 timestamp=$(date -u +"%Y%m%d%H%M%S")
 
 export SKIP_ENV_FILE=true
@@ -44,10 +45,27 @@ export COMPOSE_PROJECT_NAME="gestionale-restore-drill-$timestamp"
 export COMPOSE_FILE="$PROJECT_ROOT/docker-compose.prod-like.yml"
 export COMPOSE_OVERRIDE_FILE="$PROJECT_ROOT/docker-compose.secrets.yml"
 export POSTGRES_DB=gestionale_restore_drill
-export GESTIONALE_DB_USERNAME=gestionale_restore_drill
-export GESTIONALE_DB_PASSWORD=
-export GESTIONALE_DB_PASSWORD_FILE=
-export GESTIONALE_DB_PASSWORD_SECRET_FILE="$secret_file"
+export GESTIONALE_DB_BOOTSTRAP_USERNAME=gestionale_restore_drill_bootstrap
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD=
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD_FILE=
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD_SECRET_FILE="$work_dir/database-bootstrap-password"
+export GESTIONALE_DB_OWNER_USERNAME=gestionale_restore_drill_owner
+export GESTIONALE_DB_MIGRATOR_USERNAME=gestionale_restore_drill_migrator
+export GESTIONALE_DB_MIGRATOR_PASSWORD=
+export GESTIONALE_DB_MIGRATOR_PASSWORD_FILE=
+export GESTIONALE_DB_MIGRATOR_PASSWORD_SECRET_FILE="$work_dir/database-migrator-password"
+export GESTIONALE_DB_RUNTIME_USERNAME=gestionale_restore_drill_runtime
+export GESTIONALE_DB_RUNTIME_PASSWORD=
+export GESTIONALE_DB_RUNTIME_PASSWORD_FILE=
+export GESTIONALE_DB_RUNTIME_PASSWORD_SECRET_FILE="$work_dir/database-runtime-password"
+export GESTIONALE_DB_BACKUP_USERNAME=gestionale_restore_drill_backup
+export GESTIONALE_DB_BACKUP_PASSWORD=
+export GESTIONALE_DB_BACKUP_PASSWORD_FILE=
+export GESTIONALE_DB_BACKUP_PASSWORD_SECRET_FILE="$work_dir/database-backup-password"
+export GESTIONALE_DB_RESTORE_USERNAME=gestionale_restore_drill_restore
+export GESTIONALE_DB_RESTORE_PASSWORD=
+export GESTIONALE_DB_RESTORE_PASSWORD_FILE=
+export GESTIONALE_DB_RESTORE_PASSWORD_SECRET_FILE="$work_dir/database-restore-password"
 export GESTIONALE_POSTGRES_PORT=${RESTORE_DRILL_POSTGRES_PORT:-55434}
 export GESTIONALE_BACKEND_PORT=18082
 export GESTIONALE_FRONTEND_PORT=18083
@@ -73,7 +91,10 @@ wait_for_postgres
 CONFIRM_RESTORE=yes SKIP_ENV_FILE=true RESTART_APP_SERVICES=false "$SCRIPT_DIR/restore.sh" "$backup_file" >/dev/null
 
 for table in flyway_schema_history products user_accounts customer_orders fiscal_documents; do
-  exists=$(compose exec -T postgres psql -U "$GESTIONALE_DB_USERNAME" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1 -c "select to_regclass('public.$table') is not null;")
+  exists=$(compose exec -T postgres sh -eu -c '
+    export PGPASSWORD=$(cat "$GESTIONALE_DB_BACKUP_PASSWORD_FILE")
+    exec psql -h 127.0.0.1 -U "$GESTIONALE_DB_BACKUP_USERNAME" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1 -c "$1"
+  ' sh "select to_regclass('public.$table') is not null;")
   if [ "$exists" != t ]; then
     echo "Restore drill fallito: tabella $table assente." >&2
     exit 1
@@ -82,7 +103,10 @@ done
 
 expected_version=$(find "$PROJECT_ROOT/web/backend/src/main/resources/db/migration" -maxdepth 1 -type f -name 'V*__*.sql' -print |
   sed -E 's#^.*/V([0-9]+)__.*#\1#' | sort -n | tail -n 1)
-restored_version=$(compose exec -T postgres psql -U "$GESTIONALE_DB_USERNAME" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1 -c "select max(cast(version as integer)) from flyway_schema_history where success;")
+restored_version=$(compose exec -T postgres sh -eu -c '
+  export PGPASSWORD=$(cat "$GESTIONALE_DB_BACKUP_PASSWORD_FILE")
+  exec psql -h 127.0.0.1 -U "$GESTIONALE_DB_BACKUP_USERNAME" -d "$POSTGRES_DB" -tA -v ON_ERROR_STOP=1 -c "select max(cast(version as integer)) from flyway_schema_history where success;"
+')
 
 if [ -z "$expected_version" ] || [ "$restored_version" != "$expected_version" ]; then
   echo "Restore drill fallito: versione Flyway non allineata." >&2

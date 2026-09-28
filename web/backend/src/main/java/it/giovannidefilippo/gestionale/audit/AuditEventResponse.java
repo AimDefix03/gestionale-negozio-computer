@@ -1,10 +1,12 @@
 package it.giovannidefilippo.gestionale.audit;
 
-import java.time.LocalDateTime;
+import it.giovannidefilippo.gestionale.common.BusinessTime;
+
+import java.time.OffsetDateTime;
 
 public record AuditEventResponse(
         Long id,
-        LocalDateTime timestamp,
+        OffsetDateTime timestamp,
         String actor,
         String role,
         String action,
@@ -19,7 +21,7 @@ public record AuditEventResponse(
     static AuditEventResponse from(AuditEvent event) {
         return new AuditEventResponse(
                 event.getId(),
-                event.getTimestamp(),
+                BusinessTime.utcOffset(event.getTimestamp()),
                 event.getActor(),
                 event.getRole(),
                 event.getAction(),

@@ -46,13 +46,30 @@ assert_read_only_mount() {
   fi
 }
 
-assert_empty "$postgres_container" POSTGRES_PASSWORD
-assert_file_reference "$postgres_container" POSTGRES_PASSWORD_FILE /run/secrets/gestionale_db_password
-assert_read_only_mount "$postgres_container" /run/secrets/gestionale_db_password
+for mapping in \
+  'POSTGRES_PASSWORD|/run/secrets/gestionale_db_bootstrap_password' \
+  'GESTIONALE_DB_MIGRATOR_PASSWORD|/run/secrets/gestionale_db_migrator_password' \
+  'GESTIONALE_DB_RUNTIME_PASSWORD|/run/secrets/gestionale_db_runtime_password' \
+  'GESTIONALE_DB_BACKUP_PASSWORD|/run/secrets/gestionale_db_backup_password' \
+  'GESTIONALE_DB_RESTORE_PASSWORD|/run/secrets/gestionale_db_restore_password'
+do
+  variable=${mapping%%|*}
+  destination=${mapping#*|}
+  assert_empty "$postgres_container" "$variable"
+  assert_file_reference "$postgres_container" "${variable}_FILE" "$destination"
+  assert_read_only_mount "$postgres_container" "$destination"
+done
 
-assert_empty "$backend_container" GESTIONALE_DB_PASSWORD
-assert_file_reference "$backend_container" GESTIONALE_DB_PASSWORD_FILE /run/secrets/gestionale_db_password
-assert_read_only_mount "$backend_container" /run/secrets/gestionale_db_password
+for mapping in \
+  'GESTIONALE_DB_RUNTIME_PASSWORD|/run/secrets/gestionale_db_runtime_password' \
+  'GESTIONALE_DB_MIGRATOR_PASSWORD|/run/secrets/gestionale_db_migrator_password'
+do
+  variable=${mapping%%|*}
+  destination=${mapping#*|}
+  assert_empty "$backend_container" "$variable"
+  assert_file_reference "$backend_container" "${variable}_FILE" "$destination"
+  assert_read_only_mount "$backend_container" "$destination"
+done
 
 assert_empty "$backend_container" GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD
 bootstrap_file=$(environment_for "$backend_container" | sed -n 's/^GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_FILE=//p')

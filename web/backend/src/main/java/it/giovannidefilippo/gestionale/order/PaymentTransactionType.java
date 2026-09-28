@@ -2,7 +2,9 @@ package it.giovannidefilippo.gestionale.order;
 
 public enum PaymentTransactionType {
     RECEIPT("Incasso"),
-    REFUND("Rimborso");
+    REFUND("Rimborso"),
+    REVERSAL("Storno annullamento"),
+    RECONCILIATION("Riconciliazione storica");
 
     private final String label;
 

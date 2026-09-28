@@ -26,43 +26,70 @@ if [ "$BACKUP_DIR" = / ]; then
   exit 2
 fi
 
-if [ -z "${GESTIONALE_DB_USERNAME:-}" ]; then
-  echo "GESTIONALE_DB_USERNAME mancante. Impostalo nell'ambiente o in .env.docker." >&2
-  exit 2
-fi
+require_database_identity() {
+  identity=$1
+  username_variable="GESTIONALE_DB_${identity}_USERNAME"
+  password_variable="GESTIONALE_DB_${identity}_PASSWORD"
+  password_file_variable="${password_variable}_FILE"
+  password_secret_variable="${password_variable}_SECRET_FILE"
 
-password_channels=0
-[ -n "${GESTIONALE_DB_PASSWORD:-}" ] && password_channels=$((password_channels + 1))
-[ -n "${GESTIONALE_DB_PASSWORD_FILE:-}" ] && password_channels=$((password_channels + 1))
-[ -n "${GESTIONALE_DB_PASSWORD_SECRET_FILE:-}" ] && password_channels=$((password_channels + 1))
+  eval "username=\${$username_variable-}"
+  eval "password=\${$password_variable-}"
+  eval "password_file=\${$password_file_variable-}"
+  eval "password_secret=\${$password_secret_variable-}"
 
-if [ "$password_channels" -eq 0 ]; then
-  echo "Configura GESTIONALE_DB_PASSWORD, GESTIONALE_DB_PASSWORD_FILE oppure GESTIONALE_DB_PASSWORD_SECRET_FILE." >&2
-  exit 2
-fi
-
-if [ "$password_channels" -ne 1 ]; then
-  echo "Configura un solo canale per la password database." >&2
-  exit 2
-fi
-
-if [ -n "${GESTIONALE_DB_PASSWORD_SECRET_FILE:-}" ]; then
-  case "$GESTIONALE_DB_PASSWORD_SECRET_FILE" in
-    /*) ;;
-    *) GESTIONALE_DB_PASSWORD_SECRET_FILE="$PROJECT_ROOT/$GESTIONALE_DB_PASSWORD_SECRET_FILE" ;;
-  esac
-  if [ ! -r "$GESTIONALE_DB_PASSWORD_SECRET_FILE" ]; then
-    echo "Il file secret database non e leggibile." >&2
+  if [ -z "$username" ]; then
+    printf '%s mancante.\n' "$username_variable" >&2
     exit 2
   fi
+
+  password_channels=0
+  [ -n "$password" ] && password_channels=$((password_channels + 1))
+  [ -n "$password_file" ] && password_channels=$((password_channels + 1))
+  [ -n "$password_secret" ] && password_channels=$((password_channels + 1))
+  if [ "$password_channels" -ne 1 ]; then
+    printf 'Configura un solo canale password per il ruolo %s.\n' "$identity" >&2
+    exit 2
+  fi
+}
+
+configure_secrets_override() {
+  configured=false
+  for identity in BOOTSTRAP MIGRATOR RUNTIME BACKUP RESTORE; do
+    eval "secret_file=\${GESTIONALE_DB_${identity}_PASSWORD_SECRET_FILE-}"
+    [ -n "$secret_file" ] && configured=true
+  done
+
+  [ "$configured" = true ] || return 0
+
+  for identity in BOOTSTRAP MIGRATOR RUNTIME BACKUP RESTORE; do
+    variable="GESTIONALE_DB_${identity}_PASSWORD_SECRET_FILE"
+    eval "secret_file=\${$variable-}"
+    if [ -z "$secret_file" ]; then
+      printf '%s mancante per l override Compose dei segreti.\n' "$variable" >&2
+      exit 2
+    fi
+    case "$secret_file" in
+      /*) ;;
+      *) secret_file="$PROJECT_ROOT/$secret_file" ;;
+    esac
+    if [ ! -r "$secret_file" ]; then
+      printf 'Il file secret per il ruolo %s non e leggibile.\n' "$identity" >&2
+      exit 2
+    fi
+    export "$variable=$secret_file"
+  done
+
   secrets_override="$PROJECT_ROOT/docker-compose.secrets.yml"
   if [ -n "$COMPOSE_OVERRIDE_FILE" ] && [ "$COMPOSE_OVERRIDE_FILE" != "$secrets_override" ]; then
-    echo "COMPOSE_OVERRIDE_FILE incompatibile con il file secret database." >&2
+    echo "COMPOSE_OVERRIDE_FILE incompatibile con i file secret database." >&2
     exit 2
   fi
   COMPOSE_OVERRIDE_FILE=$secrets_override
-  export GESTIONALE_DB_PASSWORD_SECRET_FILE COMPOSE_OVERRIDE_FILE
-fi
+  export COMPOSE_OVERRIDE_FILE
+}
+
+configure_secrets_override
 
 safe_db_name=$(printf '%s' "$POSTGRES_DB" | tr -c 'A-Za-z0-9_-' '_')
 BACKUP_FILE_PREFIX=${BACKUP_FILE_PREFIX:-"gestionale_${safe_db_name}_"}
@@ -81,9 +108,10 @@ compose() {
 }
 
 wait_for_postgres() {
+  bootstrap_username=${GESTIONALE_DB_BOOTSTRAP_USERNAME:-postgres}
   attempt=1
   while [ "$attempt" -le 30 ]; do
-    if compose exec -T postgres pg_isready -U "$GESTIONALE_DB_USERNAME" -d "$POSTGRES_DB" >/dev/null 2>&1; then
+    if compose exec -T postgres pg_isready -U "$bootstrap_username" -d "$POSTGRES_DB" >/dev/null 2>&1; then
       return 0
     fi
     attempt=$((attempt + 1))

@@ -1,9 +1,9 @@
 package it.giovannidefilippo.gestionale.product;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class ProductLookupControllerTest {
-    private static final String SUPER_ADMIN_PASSWORD = "RootSecure123!";
+    private static final String SUPER_ADMIN_PASSWORD = "Test-Bootstrap-9842!";
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,7 +38,7 @@ class ProductLookupControllerTest {
 
     @Test
     void productLookupReturnsLightweightCatalogData() throws Exception {
-        String token = login("admin", SUPER_ADMIN_PASSWORD, "SUPER_ADMIN");
+        String token = login("test_super_admin", SUPER_ADMIN_PASSWORD, "SUPER_ADMIN");
         String code = "LOOK-" + UUID.randomUUID().toString().substring(0, 8);
         createProduct(token, code);
 
@@ -81,7 +81,6 @@ class ProductLookupControllerTest {
                                   "brand": "LookupBrand",
                                   "productType": "Scheda lookup",
                                   "usageContext": "",
-                                  "quantity": 6,
                                   "price": 90.00,
                                   "discount": 0.00
                                 }

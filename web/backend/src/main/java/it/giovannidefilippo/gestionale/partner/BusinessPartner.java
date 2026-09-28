@@ -1,5 +1,6 @@
 package it.giovannidefilippo.gestionale.partner;
 
+import it.giovannidefilippo.gestionale.common.BusinessIdentifierCanonicalizer;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -21,6 +22,9 @@ public class BusinessPartner {
     @Column(nullable = false, unique = true)
     private String code;
 
+    @Column(nullable = false, unique = true)
+    private String codeCanonical;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BusinessPartnerType type;
@@ -40,6 +44,8 @@ public class BusinessPartner {
 
     @Column(length = 1200)
     private String notes;
+
+    private Long linkedAccountId;
 
     @Column(nullable = false)
     private boolean active;
@@ -61,7 +67,11 @@ public class BusinessPartner {
     }
 
     void update(BusinessPartnerRequest request, LocalDateTime updatedAt) {
-        this.code = clean(request.code());
+        if (linkedAccountId != null && request.type() != BusinessPartnerType.CUSTOMER) {
+            throw new IllegalStateException("Scollega l'account cliente prima di modificare il tipo di anagrafica.");
+        }
+        this.code = BusinessIdentifierCanonicalizer.display(request.code());
+        this.codeCanonical = BusinessIdentifierCanonicalizer.canonical(request.code());
         this.type = request.type();
         this.displayName = clean(request.displayName());
         this.taxCode = optional(request.taxCode());
@@ -84,6 +94,19 @@ public class BusinessPartner {
         this.updatedAt = updatedAt;
     }
 
+    void linkAccount(long accountId, LocalDateTime updatedAt) {
+        if (type != BusinessPartnerType.CUSTOMER) {
+            throw new IllegalStateException("Puoi collegare un account soltanto a un'anagrafica cliente.");
+        }
+        this.linkedAccountId = accountId;
+        this.updatedAt = updatedAt;
+    }
+
+    void unlinkAccount(LocalDateTime updatedAt) {
+        this.linkedAccountId = null;
+        this.updatedAt = updatedAt;
+    }
+
     public Long getId() { return id; }
     public String getCode() { return code; }
     public BusinessPartnerType getType() { return type; }
@@ -95,6 +118,7 @@ public class BusinessPartner {
     public String getAddress() { return address; }
     public String getCity() { return city; }
     public String getNotes() { return notes; }
+    public Long getLinkedAccountId() { return linkedAccountId; }
     public boolean isActive() { return active; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

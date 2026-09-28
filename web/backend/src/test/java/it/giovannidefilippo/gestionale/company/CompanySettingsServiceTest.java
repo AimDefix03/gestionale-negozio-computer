@@ -30,6 +30,7 @@ class CompanySettingsServiceTest {
 
         assertThat(updated.version()).isGreaterThan(current.version());
         assertThat(updated.configured()).isTrue();
+        assertThat(updated.missingDocumentFields()).isEmpty();
         assertThat(updated.legalName()).isEqualTo("Azienda Test");
         assertThat(updated.taxCode()).isEqualTo("cf-test");
         assertThat(updated.vatNumber()).isEqualTo("it001");
@@ -37,6 +38,7 @@ class CompanySettingsServiceTest {
         assertThat(updated.invoicePrefix()).isEqualTo(current.invoicePrefix());
         assertThat(updated.creditNotePrefix()).isEqualTo(current.creditNotePrefix());
         assertThat(updated.updatedBy()).isEqualTo("admin");
+        assertThat(updated.timeZone()).isEqualTo("Europe/Rome");
     }
 
     @Test
@@ -67,6 +69,27 @@ class CompanySettingsServiceTest {
                 .hasMessageContaining("devono essere diversi");
     }
 
+    @Test
+    void reportsMissingFieldsAndRejectsInvalidTimeZone() {
+        CompanySettingsResponse current = service.current();
+        CompanySettingsResponse incomplete = service.update(new CompanySettingsRequests.UpdateRequest(
+                current.version(), "", "", "", "", "", "", "", "", "", "", "Europe/Rome",
+                current.defaultVatRate(), current.invoicePrefix(), current.creditNotePrefix(), current.numberPadding()
+        ), actor());
+
+        assertThat(incomplete.configured()).isFalse();
+        assertThat(incomplete.missingDocumentFields()).containsExactly(
+                "legalName", "taxIdentifier", "address", "postalCode", "city", "province", "countryCode"
+        );
+
+        assertThatThrownBy(() -> service.update(new CompanySettingsRequests.UpdateRequest(
+                incomplete.version(), "Azienda", "CF", "", "", "", "Via Test", "80100", "Napoli", "NA", "IT", "Mars/Olympus",
+                incomplete.defaultVatRate(), incomplete.invoicePrefix(), incomplete.creditNotePrefix(), incomplete.numberPadding()
+        ), actor()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fuso orario");
+    }
+
     private static CompanySettingsRequests.UpdateRequest request(
             long version,
             String legalName,
@@ -79,7 +102,7 @@ class CompanySettingsServiceTest {
     ) {
         return new CompanySettingsRequests.UpdateRequest(
                 version, legalName, taxCode, vatNumber, "amministrazione@example.com", "+39 0000000000",
-                "Via Test 1", "80100", "Napoli", "NA", "it", vatRate,
+                "Via Test 1", "80100", "Napoli", "NA", "it", "Europe/Rome", vatRate,
                 invoicePrefix, creditNotePrefix, padding
         );
     }

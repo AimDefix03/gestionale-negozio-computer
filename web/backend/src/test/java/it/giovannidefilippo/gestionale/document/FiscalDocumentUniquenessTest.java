@@ -1,6 +1,11 @@
 package it.giovannidefilippo.gestionale.document;
 
 import it.giovannidefilippo.gestionale.common.ResourceConflictException;
+import it.giovannidefilippo.gestionale.common.TestCompanySettings;
+import it.giovannidefilippo.gestionale.company.CompanySettingsRequests;
+import it.giovannidefilippo.gestionale.company.CompanySettingsResponse;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
 import it.giovannidefilippo.gestionale.order.OrderRequests;
 import it.giovannidefilippo.gestionale.order.OrderResponse;
 import it.giovannidefilippo.gestionale.order.OrderService;
@@ -11,6 +16,7 @@ import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +28,16 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @Transactional
 class FiscalDocumentUniquenessTest {
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private InventoryService inventoryService;
 
     @Autowired
     private OrderService orderService;
@@ -37,6 +47,14 @@ class FiscalDocumentUniquenessTest {
 
     @Autowired
     private FiscalDocumentRepository repository;
+
+    @Autowired
+    private CompanySettingsService companySettingsService;
+
+    @BeforeEach
+    void configureCompany() {
+        TestCompanySettings.configure(companySettingsService, actor());
+    }
 
     @Test
     void invoiceCannotBeCreatedTwiceForSameOrder() {
@@ -71,6 +89,23 @@ class FiscalDocumentUniquenessTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void incompleteCompanyConfigurationBlocksDocumentGenerationAndCapabilities() {
+        CompanySettingsResponse current = companySettingsService.current();
+        companySettingsService.update(new CompanySettingsRequests.UpdateRequest(
+                current.version(), "", "", "", current.email(), current.phone(), "", "", "", "", "", current.timeZone(),
+                current.defaultVatRate(), current.invoicePrefix(), current.creditNotePrefix(), current.numberPadding()
+        ), actor());
+        OrderResponse order = createFulfilledOrder();
+
+        assertThat(documentService.capabilitiesForOrder(order.code(), actor()).canCreateInvoice()).isFalse();
+        assertThatThrownBy(() -> documentService.createInvoice(new FiscalDocumentRequests.CreateInvoiceRequest(order.code()), actor()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("dati aziendali obbligatori")
+                .hasMessageContaining("legalName")
+                .hasMessageContaining("taxIdentifier");
+    }
+
     private OrderResponse createFulfilledOrder() {
         String productCode = uniqueCode("DOC-PROD");
         productService.create(new ProductRequest(
@@ -81,10 +116,10 @@ class FiscalDocumentUniquenessTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                3,
                 new BigDecimal("120.00"),
                 new BigDecimal("0.00")
         ));
+        inventoryService.initialBalance(productCode, 3, "Saldo iniziale documenti", "test", "Test");
         OrderResponse order = orderService.create(
                 new OrderRequests.CreateOrderRequest(
                         "cliente_documenti",
@@ -103,7 +138,7 @@ class FiscalDocumentUniquenessTest {
                 new DocumentNumberAllocation(code, "FS", 2026, sequenceNumber),
                 type,
                 orderCode,
-                new CompanySnapshot("", "", "", "", "", "", "", "", "", "IT"),
+                new CompanySnapshot("", "", "", "", "", "", "", "", "", "IT", "Europe/Rome"),
                 CustomerSnapshot.minimal("Cliente test", "CLI-TEST"),
                 "Bonifico",
                 List.of(new FiscalDocumentLine("P-TEST", "Prodotto test", 1, new BigDecimal("100.00"), new BigDecimal("100.00"))),

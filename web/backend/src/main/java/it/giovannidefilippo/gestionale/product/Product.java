@@ -1,5 +1,6 @@
 package it.giovannidefilippo.gestionale.product;
 
+import it.giovannidefilippo.gestionale.common.BusinessIdentifierCanonicalizer;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,6 +27,9 @@ public class Product {
 
     @Column(nullable = false, unique = true)
     private String code;
+
+    @Column(nullable = false, unique = true)
+    private String codeCanonical;
 
     @Column(nullable = false)
     private String name;
@@ -60,30 +64,52 @@ public class Product {
     @Column(nullable = false)
     private boolean discontinued;
 
+    @Column(precision = 14, scale = 4)
+    private BigDecimal lastPurchaseCost;
+
+    @Column(precision = 14, scale = 4)
+    private BigDecimal averagePurchaseCost;
+
+    @Column(nullable = false)
+    private int costedQuantity;
+
     protected Product() {
     }
 
     Product(ProductRequest request) {
+        this.quantity = 0;
+        this.reservedQuantity = 0;
         update(request);
     }
 
     void update(ProductRequest request) {
-        if (request.quantity() < reservedQuantity) {
-            throw new IllegalArgumentException("La giacenza fisica non puo essere inferiore allo stock riservato.");
-        }
-        this.code = clean(request.code());
+        this.code = BusinessIdentifierCanonicalizer.display(request.code());
+        this.codeCanonical = BusinessIdentifierCanonicalizer.canonical(request.code());
         this.name = clean(request.name());
         this.description = clean(request.description());
         this.category = request.category();
         this.brand = clean(request.brand());
         this.productType = clean(request.productType());
         this.usageContext = optional(request.usageContext());
-        this.quantity = request.quantity();
         this.price = request.price().setScale(2, RoundingMode.HALF_UP);
         this.discount = request.discount().setScale(2, RoundingMode.HALF_UP);
     }
 
     void updateQuantity(int quantity) {
+        int removedQuantity = Math.max(0, this.quantity - quantity);
+        this.quantity = quantity;
+        if (removedQuantity > 0) {
+            costedQuantity = Math.max(0, costedQuantity - removedQuantity);
+        }
+        if (costedQuantity == 0) {
+            averagePurchaseCost = null;
+        }
+    }
+
+    void initializeQuantity(int quantity) {
+        if (this.quantity != 0 || this.reservedQuantity != 0) {
+            throw new IllegalStateException("Il saldo iniziale puo essere registrato soltanto prima di altre operazioni di magazzino.");
+        }
         this.quantity = quantity;
     }
 
@@ -112,8 +138,36 @@ public class Product {
         if (this.quantity < quantity) {
             throw new IllegalArgumentException("La giacenza fisica non e sufficiente per evadere il prodotto " + code + ".");
         }
-        this.quantity -= quantity;
+        updateQuantity(this.quantity - quantity);
         this.reservedQuantity -= quantity;
+    }
+
+    CostedStockReceipt receivePurchase(int receivedQuantity, BigDecimal receivedUnitCost) {
+        if (receivedQuantity <= 0) {
+            throw new IllegalArgumentException("La quantita ricevuta deve essere maggiore di zero.");
+        }
+        if (receivedUnitCost == null || receivedUnitCost.signum() < 0) {
+            throw new IllegalArgumentException("Il costo unitario ricevuto non puo essere negativo.");
+        }
+        BigDecimal unitCost = receivedUnitCost.setScale(4, RoundingMode.HALF_UP);
+        BigDecimal previousAverage = averagePurchaseCost;
+        int previousPhysical = quantity;
+        int previousCosted = costedQuantity;
+        int newCosted = previousCosted + receivedQuantity;
+        BigDecimal previousValue = previousAverage == null
+                ? BigDecimal.ZERO
+                : previousAverage.multiply(BigDecimal.valueOf(previousCosted));
+        BigDecimal receivedValue = unitCost.multiply(BigDecimal.valueOf(receivedQuantity));
+        BigDecimal newAverage = previousValue.add(receivedValue)
+                .divide(BigDecimal.valueOf(newCosted), 4, RoundingMode.HALF_UP);
+        quantity += receivedQuantity;
+        costedQuantity = newCosted;
+        lastPurchaseCost = unitCost;
+        averagePurchaseCost = newAverage;
+        return new CostedStockReceipt(
+                id, code, name, previousPhysical, quantity, previousCosted, newCosted,
+                unitCost, receivedValue.setScale(4, RoundingMode.HALF_UP), previousAverage, newAverage
+        );
     }
 
     public Long getId() {
@@ -174,6 +228,47 @@ public class Product {
 
     public boolean isDiscontinued() {
         return discontinued;
+    }
+
+    public BigDecimal getLastPurchaseCost() {
+        return lastPurchaseCost;
+    }
+
+    public BigDecimal getAveragePurchaseCost() {
+        return averagePurchaseCost;
+    }
+
+    public int getCostedQuantity() {
+        return costedQuantity;
+    }
+
+    public int getUncostedQuantity() {
+        return quantity - costedQuantity;
+    }
+
+    public BigDecimal getCostCoveragePercentage() {
+        if (quantity == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(costedQuantity)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(quantity), 2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal getKnownInventoryCost() {
+        if (averagePurchaseCost == null || costedQuantity == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return averagePurchaseCost.multiply(BigDecimal.valueOf(costedQuantity)).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal getPotentialGrossMarginOnCostedStock() {
+        if (averagePurchaseCost == null || costedQuantity == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return getDiscountedPrice().subtract(averagePurchaseCost)
+                .multiply(BigDecimal.valueOf(costedQuantity))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     public BigDecimal getDiscountedPrice() {

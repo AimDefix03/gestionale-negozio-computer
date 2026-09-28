@@ -3,8 +3,8 @@ import type { BusinessPartner, BusinessPartnerPayload, PageResponse, PartnerQuer
 
 const baseUrl = '/api/partners';
 
-export function fetchPartnerPage(query: PartnerQuery = {}): Promise<PageResponse<BusinessPartner>> {
-  return request<PageResponse<BusinessPartner>>(`${baseUrl}${toQueryString(query)}`);
+export function fetchPartnerPage(query: PartnerQuery = {}, signal?: AbortSignal): Promise<PageResponse<BusinessPartner>> {
+  return request<PageResponse<BusinessPartner>>(`${baseUrl}${toQueryString(query)}`, { signal });
 }
 
 export function fetchPartners(query: PartnerQuery = {}): Promise<BusinessPartner[]> {
@@ -28,4 +28,17 @@ export function updatePartner(code: string, payload: BusinessPartnerPayload): Pr
 
 export async function deactivatePartner(code: string): Promise<void> {
   await request<void>(`${baseUrl}/${encodeURIComponent(code)}`, { method: 'DELETE' });
+}
+
+export function linkPartnerAccount(code: string, accountId: number): Promise<BusinessPartner> {
+  return request<BusinessPartner>(`${baseUrl}/${encodeURIComponent(code)}/account-link`, {
+    method: 'PUT',
+    body: JSON.stringify({ accountId })
+  });
+}
+
+export function unlinkPartnerAccount(code: string): Promise<BusinessPartner> {
+  return request<BusinessPartner>(`${baseUrl}/${encodeURIComponent(code)}/account-link`, {
+    method: 'DELETE'
+  });
 }

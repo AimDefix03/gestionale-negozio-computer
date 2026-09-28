@@ -59,18 +59,22 @@ class RecurringProdLikeWorkflowTest {
         String cleanupVerifier = Files.readString(Path.of("../../scripts/ci/verify-prod-like-cleanup.sh"));
         int cleanupStart = runner.indexOf("cleanup() {");
         int capture = runner.indexOf("  capture_diagnostics\n", cleanupStart);
-        int composeDown = runner.indexOf("  compose down -v --remove-orphans", cleanupStart);
+        int guardedCleanup = runner.indexOf("    docker_run_cleanup", cleanupStart);
 
         assertThat(cleanupStart).isGreaterThanOrEqualTo(0);
         assertThat(capture).isGreaterThan(cleanupStart);
-        assertThat(composeDown).isGreaterThan(capture);
+        assertThat(guardedCleanup).isGreaterThan(capture);
         assertThat(runner)
-                .contains("trap cleanup EXIT INT TERM")
+                .doesNotContain("compose down")
+                .contains("trap cleanup EXIT")
+                .contains("docker_run_inventory")
                 .contains("verify-prod-like-cleanup.sh");
         assertThat(cleanupVerifier)
-                .contains("com.docker.compose.project=$PROJECT_NAME")
-                .contains("docker ps -aq")
-                .contains("docker volume ls -q")
-                .contains("docker network ls -q");
+                .contains("docker-run-safety.sh")
+                .contains("docker_run_validate_id")
+                .contains("docker_run_assert_project_unused")
+                .doesNotContain("docker rm")
+                .doesNotContain("docker volume rm")
+                .doesNotContain("docker network rm");
     }
 }

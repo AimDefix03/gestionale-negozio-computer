@@ -26,9 +26,13 @@ Variabili principali:
 | --- | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | si | profilo Spring, normalmente `prod` |
 | `GESTIONALE_DB_URL` | si | JDBC URL del database PostgreSQL |
-| `GESTIONALE_DB_USERNAME` | si | utente applicativo database |
-| `GESTIONALE_DB_PASSWORD` | alternativa | password database iniettata direttamente dal secret manager |
-| `GESTIONALE_DB_PASSWORD_FILE` | alternativa | file runtime contenente la password database; non usarlo insieme al valore diretto |
+| `GESTIONALE_DB_OWNER_USERNAME` | si | ruolo proprietario `NOLOGIN` usato come identita di ownership degli oggetti |
+| `GESTIONALE_DB_RUNTIME_USERNAME` | si | ruolo applicativo con soli privilegi DML |
+| `GESTIONALE_DB_RUNTIME_PASSWORD` | alternativa | password runtime iniettata direttamente dal secret manager |
+| `GESTIONALE_DB_RUNTIME_PASSWORD_FILE` | alternativa | file runtime della password applicativa; non usarlo insieme al valore diretto |
+| `GESTIONALE_DB_MIGRATOR_USERNAME` | si | ruolo Flyway autorizzato ad assumere il ruolo owner |
+| `GESTIONALE_DB_MIGRATOR_PASSWORD` | alternativa | password migrator iniettata direttamente dal secret manager |
+| `GESTIONALE_DB_MIGRATOR_PASSWORD_FILE` | alternativa | file runtime della password migrator; non usarlo insieme al valore diretto |
 | `GESTIONALE_MANAGEMENT_PORT` | no | porta interna Actuator nel profilo `prod`, default `9090`; non pubblicarla verso Internet |
 | `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED` | solo primo avvio | abilita creazione primo super admin se il database e vuoto |
 | `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME` | solo primo avvio | username del primo super admin |
@@ -50,9 +54,23 @@ Il bootstrap crea il primo super admin solo quando:
 - `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED=true`;
 - username e password sono configurati.
 
-In produzione sono vietate le credenziali locali di default, ad esempio `admin/RootSecure123!`.
+Le credenziali locali note o provenienti da configurazioni demo sono vietate in ogni profilo.
 
 Dopo il primo avvio, disabilitare il bootstrap e riavviare l'applicazione.
+
+## Ruoli PostgreSQL
+
+Il database usa identita separate per responsabilita:
+
+| Ruolo | Login | Privilegi previsti | Divieti principali |
+| --- | --- | --- | --- |
+| owner | no | proprietario di database, schema e oggetti | nessun accesso diretto dall'applicazione |
+| migrator | si | connessione e `SET ROLE` verso owner per Flyway | nessun uso durante il traffico applicativo |
+| runtime | si | `SELECT`, `INSERT`, `UPDATE`, `DELETE` e uso sequenze | nessun `CREATE`, `ALTER`, `DROP`, ownership o amministrazione database |
+| backup | si | sola lettura degli oggetti applicativi | nessuna scrittura o DDL |
+| restore | si | creazione/rimozione database e assunzione owner durante un restore autorizzato | nessun uso da backend o backup ordinario |
+
+Lo stack crea i ruoli su un database nuovo tramite `web/postgres/initdb/10-create-application-roles.sh`. Per adeguare un database esistente usare `scripts/db/provision-database-roles.sh` con conferma esplicita e finestra di manutenzione. Il backend riceve soltanto i segreti runtime e migrator; backup e restore usano processi e credenziali separati.
 
 ## Frontend
 
@@ -68,7 +86,9 @@ File esempio:
 
 - `.env.docker.example`
 
-Il file va copiato in `.env.docker`. I percorsi `GESTIONALE_DB_PASSWORD_SECRET_FILE` e, solo al primo avvio, `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_SECRET_FILE` devono puntare a file esterni al repository.
+Il file va copiato in `.env.docker`. Devono puntare a file esterni al repository i cinque percorsi `GESTIONALE_DB_*_PASSWORD_SECRET_FILE` per bootstrap, migrator, runtime, backup e restore e, solo al primo avvio applicativo, `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_SECRET_FILE`.
+
+La porta PostgreSQL dello stack prod-like e pubblicata esclusivamente su `127.0.0.1`, per default come `127.0.0.1:5433`. In produzione deve essere rimossa del tutto quando amministrazione, backup e restore raggiungono il database dalla rete privata.
 
 Variabili operative dei backup:
 
@@ -106,8 +126,11 @@ Variabili del reverse proxy:
 | `GESTIONALE_LOGIN_RATE_LIMIT` | `10r/m` | frequenza login accettata per IP da Nginx; usare la sintassi Nginx, ad esempio `10r/m` o `1r/s` |
 | `GESTIONALE_LOGIN_RATE_BURST` | `10` | richieste aggiuntive ammesse nel burst prima della risposta `429` |
 | `GESTIONALE_LOGIN_RATE_RETRY_AFTER_SECONDS` | `60` | valore in secondi comunicato al client tramite `Retry-After` |
+| `GESTIONALE_REGISTER_RATE_LIMIT` | `5r/m` | frequenza registrazioni pubbliche accettata per IP da Nginx |
+| `GESTIONALE_REGISTER_RATE_BURST` | `5` | richieste di registrazione aggiuntive ammesse nel burst prima della risposta `429` |
+| `GESTIONALE_REGISTER_RATE_RETRY_AFTER_SECONDS` | `60` | valore in secondi comunicato alla registrazione tramite `Retry-After` |
 
-Il limite Nginx per IP completa, ma non sostituisce, il lockout persistente per username del backend. In presenza di NAT condivisi o proxy aziendali le soglie devono essere verificate con traffico realistico. Dietro un load balancer, configurare l'IP reale solo per indirizzi proxy esplicitamente fidati.
+I limiti Nginx per IP proteggono separatamente login e registrazione. Il limite login completa, ma non sostituisce, il lockout persistente per username del backend. In presenza di NAT condivisi o proxy aziendali le soglie devono essere verificate con traffico realistico. Dietro un load balancer, configurare l'IP reale solo per indirizzi proxy esplicitamente fidati.
 
 ## Regole sui segreti
 
@@ -134,7 +157,7 @@ Prima di avviare in produzione verificare:
 - esposizione Actuator limitata a `health`, con dettagli disabilitati e probe liveness/readiness verificate;
 - endpoint Prometheus raggiungibile solo dalla rete di monitoraggio e mai dalla porta API pubblica;
 - log JSON, rotazione Docker, metriche e regole alert verificati come descritto in `docs/OBSERVABILITY.md`;
-- soglie rate limit login configurate e verificate senza disabilitare il lockout backend;
+- soglie rate limit login e registrazione configurate separatamente e verificate senza disabilitare il lockout backend;
 - durata assoluta, timeout inattivita e intervallo aggiornamento sessione coerenti con le policy aziendali;
 - nessun `.env` tracciato da Git;
 - Gitleaks completato senza rilevazioni non gestite;

@@ -9,14 +9,17 @@ Il progetto supporta sviluppo locale, test automatici e uno stack `prod-like` co
 Avviare PostgreSQL:
 
 ```bash
-docker compose up -d postgres
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker up -d --build postgres
 ```
+
+Prima dell'avvio sostituire tutti i placeholder in `.env.docker` con credenziali locali indipendenti. Il file non va versionato.
 
 Avviare backend:
 
 ```bash
 cd web/backend
-mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 ```
 
 Avviare frontend:
@@ -28,13 +31,16 @@ npm run dev
 
 ## Configurazione database sviluppo
 
-Valori predefiniti:
+Configurazione minima del backend:
 
 - `GESTIONALE_DB_URL=jdbc:postgresql://localhost:5432/gestionale`
-- `GESTIONALE_DB_USERNAME=gestionale`
-- `GESTIONALE_DB_PASSWORD=gestionale_dev_password`
+- `GESTIONALE_DB_OWNER_USERNAME=gestionale_owner`
+- `GESTIONALE_DB_RUNTIME_USERNAME=gestionale_runtime`
+- `GESTIONALE_DB_RUNTIME_PASSWORD=<password-runtime-locale>`
+- `GESTIONALE_DB_MIGRATOR_USERNAME=gestionale_migrator`
+- `GESTIONALE_DB_MIGRATOR_PASSWORD=<password-migrator-locale>`
 
-Queste credenziali sono solo locali e non devono essere riutilizzate in produzione.
+Non esistono password predefinite. Le credenziali locali devono essere diverse da quelle di ambienti condivisi o produzione.
 
 La configurazione completa delle variabili ambiente e descritta in `docs/CONFIGURATION.md`.
 
@@ -54,26 +60,21 @@ Parametri configurabili:
 
 ## Bootstrap super admin
 
-Il backend crea il primo super admin solo se il database non contiene account e il bootstrap e abilitato esplicitamente.
-
-Nel profilo `dev` i valori locali sono:
-
-- `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED=true`
-- `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME=admin`
-- `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD=RootSecure123!`
-
-I vecchi nomi `GESTIONALE_SEED_ADMIN_*` sono ancora accettati in `dev` per compatibilita, ma non sono il percorso raccomandato.
+Il backend crea il primo super admin solo se il database non contiene account e il bootstrap e abilitato esplicitamente. Il bootstrap e disabilitato per default in tutti i profili e non esistono credenziali precompilate o alias legacy.
 
 In `prod`, se il database e vuoto e il bootstrap non e configurato, l'applicazione si ferma con errore. Primo avvio produzione:
 
 ```bash
 SPRING_PROFILES_ACTIVE=prod \
 GESTIONALE_DB_URL=jdbc:postgresql://host:5432/gestionale \
-GESTIONALE_DB_USERNAME=gestionale_app \
-GESTIONALE_DB_PASSWORD=*** \
+GESTIONALE_DB_OWNER_USERNAME=gestionale_owner \
+GESTIONALE_DB_RUNTIME_USERNAME=gestionale_runtime \
+GESTIONALE_DB_RUNTIME_PASSWORD=*** \
+GESTIONALE_DB_MIGRATOR_USERNAME=gestionale_migrator \
+GESTIONALE_DB_MIGRATOR_PASSWORD=*** \
 GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED=true \
 GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME=nome_admin_sicuro \
-GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD='UnaPasswordMoltoForte123!' \
+GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD='<secret-unico-fornito-in-modo-protetto>' \
 mvn spring-boot:run
 ```
 
@@ -81,10 +82,12 @@ Dopo la creazione del primo super admin, riavviare senza `GESTIONALE_BOOTSTRAP_S
 
 Regole produzione:
 
-- non usare credenziali locali di default come `admin/RootSecure123!`;
+- non usare username o password locali note: il backend le rifiuta in ogni profilo;
 - password super admin minima: 12 caratteri, maiuscole, minuscole, numeri e simboli;
 - il bootstrap non aggiorna o ricrea account se esiste gia almeno un account;
 - la creazione di altri admin passa dal pannello operativo ed e consentita solo al super admin.
+
+Un JAR avviato senza profilo e configurazione oppure con profilo `prod` privo di segreti deve terminare prima di raggiungere lo stato pronto. Il contratto si verifica con `scripts/security/verify-backend-fail-closed.sh`.
 
 ## Test
 
@@ -102,8 +105,11 @@ Avvio backend con profilo produzione:
 ```bash
 SPRING_PROFILES_ACTIVE=prod \
 GESTIONALE_DB_URL=jdbc:postgresql://host:5432/gestionale \
-GESTIONALE_DB_USERNAME=gestionale_app \
-GESTIONALE_DB_PASSWORD=*** \
+GESTIONALE_DB_OWNER_USERNAME=gestionale_owner \
+GESTIONALE_DB_RUNTIME_USERNAME=gestionale_runtime \
+GESTIONALE_DB_RUNTIME_PASSWORD=*** \
+GESTIONALE_DB_MIGRATOR_USERNAME=gestionale_migrator \
+GESTIONALE_DB_MIGRATOR_PASSWORD=*** \
 mvn spring-boot:run
 ```
 
@@ -113,6 +119,7 @@ Nel profilo `prod`:
 - H2 console resta disabilitata;
 - Hibernate usa `ddl-auto: validate`;
 - Flyway resta attivo;
+- Hibernate usa il ruolo runtime privo di DDL e Flyway usa il ruolo migrator separato con `SET ROLE` verso l'owner `NOLOGIN`;
 - le credenziali database devono arrivare da variabili protette dell'infrastruttura o file secret materializzati dal secret manager;
 - Actuator ascolta sulla porta management interna `9090`, configurabile con `GESTIONALE_MANAGEMENT_PORT`;
 - l'esposizione Actuator include `health` e `prometheus`, i dettagli health sono nascosti e le probe sono separate in liveness e readiness;

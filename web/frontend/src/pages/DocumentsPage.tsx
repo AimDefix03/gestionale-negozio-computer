@@ -7,16 +7,18 @@ type Props = {
   page: PageResponse<FiscalDocument>;
   query: DocumentQuery;
   creditReason: string;
+  busy: boolean;
   pageSize: number;
   onQueryChange: (query: DocumentQuery) => void;
   onCreditReasonChange: (reason: string) => void;
   onCreditNote: (orderCode: string) => void;
 };
 
-export default function DocumentsPage({ page, query, creditReason, pageSize, onQueryChange, onCreditReasonChange, onCreditNote }: Props) {
+export default function DocumentsPage({ page, query, creditReason, busy, pageSize, onQueryChange, onCreditReasonChange, onCreditNote }: Props) {
   return (
     <DataList
       title="Documenti simulati"
+      columns={['Codice', 'Documento', 'Ordine', 'Cliente', 'Importi', 'Data']}
       rows={page.content.map((document) => [
         document.code,
         <div className="product-cell"><strong>{document.typeLabel}</strong><span>{document.companySnapshotLegalName || 'Emittente non configurato'} · IVA {(document.vatRate * 100).toLocaleString('it-IT')}%</span></div>,
@@ -27,9 +29,8 @@ export default function DocumentsPage({ page, query, creditReason, pageSize, onQ
       ])}
       actions={(documentCode) => {
         const document = page.content.find((item) => item.code === documentCode);
-        const hasCreditNote = Boolean(document && page.content.some((item) => item.relatedOrderCode === document.relatedOrderCode && item.type === 'SIMULATED_CREDIT_NOTE'));
-        if (!document || document.type !== 'SIMULATED_INVOICE' || hasCreditNote) return <span className="locked-action">Nessuna azione</span>;
-        return <button className="link-button" onClick={() => onCreditNote(document.relatedOrderCode)}>Nota credito</button>;
+        if (!document?.capabilities.canCreateCreditNote) return <span className="locked-action">Nessuna azione</span>;
+        return <button className="link-button" disabled={busy} onClick={() => onCreditNote(document.relatedOrderCode)}>Nota credito</button>;
       }}
       footer={<PaginationControls page={page} onPageChange={(nextPage) => onQueryChange({ ...query, page: nextPage })} />}
     >

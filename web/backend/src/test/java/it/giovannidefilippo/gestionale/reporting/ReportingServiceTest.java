@@ -1,6 +1,8 @@
 package it.giovannidefilippo.gestionale.reporting;
 
 import it.giovannidefilippo.gestionale.common.TimeProvider;
+import it.giovannidefilippo.gestionale.company.CompanySettingsResponse;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
 import it.giovannidefilippo.gestionale.order.OrderStatus;
 import it.giovannidefilippo.gestionale.order.SalesOrderItemReportSource;
 import it.giovannidefilippo.gestionale.order.SalesOrderReportSource;
@@ -17,12 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ReportingServiceTest {
@@ -37,11 +41,15 @@ class ReportingServiceTest {
     @Mock
     private TimeProvider timeProvider;
 
+    @Mock
+    private CompanySettingsService companySettingsService;
+
     private ReportingService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReportingService(salesUsage, inventoryUsage, timeProvider);
+        lenient().when(companySettingsService.current()).thenReturn(companySettings());
+        service = new ReportingService(salesUsage, inventoryUsage, timeProvider, companySettingsService);
     }
 
     @Test
@@ -49,7 +57,8 @@ class ReportingServiceTest {
         LocalDate from = LocalDate.of(2026, 1, 1);
         LocalDate to = LocalDate.of(2026, 7, 14);
         when(timeProvider.localDateTime()).thenReturn(NOW);
-        when(salesUsage.findForReport(from, to, OrderStatus.FULFILLED, ReportingService.MAX_REPORT_ROWS)).thenReturn(List.of(
+        when(timeProvider.instant()).thenReturn(Instant.parse("2026-07-14T10:30:00Z"));
+        when(salesUsage.findForReport(LocalDateTime.of(2025, 12, 31, 23, 0), LocalDateTime.of(2026, 7, 14, 22, 0), OrderStatus.FULFILLED, ReportingService.MAX_REPORT_ROWS)).thenReturn(List.of(
                 order("ORD-1", "Cliente Uno", "GPU-1", "Scheda grafica", 2, "200.00", "150.00", "20.00", "130.00", "50.00"),
                 order("ORD-2", "Cliente Due", "GPU-1", "Scheda grafica", 1, "100.00", "100.00", "0.00", "100.00", "0.00")
         ));
@@ -73,7 +82,10 @@ class ReportingServiceTest {
     @Test
     void salesReportDefaultsToCurrentYearAndForwardsTheRowLimit() {
         when(timeProvider.localDateTime()).thenReturn(NOW);
-        when(salesUsage.findForReport(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 7, 14), null, ReportingService.MAX_REPORT_ROWS)).thenReturn(List.of());
+        when(timeProvider.instant()).thenReturn(Instant.parse("2026-07-14T10:30:00Z"));
+        LocalDateTime startUtc = LocalDateTime.of(2025, 12, 31, 23, 0);
+        LocalDateTime endUtc = LocalDateTime.of(2026, 7, 14, 22, 0);
+        when(salesUsage.findForReport(startUtc, endUtc, null, ReportingService.MAX_REPORT_ROWS)).thenReturn(List.of());
 
         SalesReportResponse report = service.sales(null, null, null);
 
@@ -81,12 +93,12 @@ class ReportingServiceTest {
         assertThat(report.to()).isEqualTo(LocalDate.of(2026, 7, 14));
         assertThat(report.status()).isEqualTo("ALL");
         assertThat(report.averageOrderValue()).isEqualByComparingTo("0.00");
-        verify(salesUsage).findForReport(report.from(), report.to(), null, ReportingService.MAX_REPORT_ROWS);
+        verify(salesUsage).findForReport(startUtc, endUtc, null, ReportingService.MAX_REPORT_ROWS);
     }
 
     @Test
     void salesReportRejectsInvalidOrExcessivePeriods() {
-        when(timeProvider.localDateTime()).thenReturn(NOW);
+        when(timeProvider.instant()).thenReturn(Instant.parse("2026-07-14T10:30:00Z"));
 
         assertThatThrownBy(() -> service.sales(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1), null))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -94,6 +106,28 @@ class ReportingServiceTest {
         assertThatThrownBy(() -> service.sales(LocalDate.of(2020, 1, 1), LocalDate.of(2026, 1, 2), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("cinque anni");
+    }
+
+    @Test
+    void salesReportBuildsUtcBoundsFromCompanyTimeZoneAcrossDst() {
+        LocalDate dstDay = LocalDate.of(2026, 3, 29);
+        when(timeProvider.localDateTime()).thenReturn(NOW);
+        when(timeProvider.instant()).thenReturn(Instant.parse("2026-03-29T12:00:00Z"));
+        when(salesUsage.findForReport(
+                LocalDateTime.of(2026, 3, 28, 23, 0),
+                LocalDateTime.of(2026, 3, 29, 22, 0),
+                null,
+                ReportingService.MAX_REPORT_ROWS
+        )).thenReturn(List.of());
+
+        service.sales(dstDay, dstDay, null);
+
+        verify(salesUsage).findForReport(
+                LocalDateTime.of(2026, 3, 28, 23, 0),
+                LocalDateTime.of(2026, 3, 29, 22, 0),
+                null,
+                ReportingService.MAX_REPORT_ROWS
+        );
     }
 
     @Test
@@ -110,7 +144,7 @@ class ReportingServiceTest {
         assertThat(report.physicalUnits()).isEqualTo(7);
         assertThat(report.reservedUnits()).isEqualTo(4);
         assertThat(report.availableUnits()).isEqualTo(3);
-        assertThat(report.inventoryValue()).isEqualByComparingTo("550.00");
+        assertThat(report.potentialRetailStockValue()).isEqualByComparingTo("550.00");
         assertThat(report.lowStockCount()).isEqualTo(1);
         assertThat(report.outOfStockCount()).isEqualTo(1);
         assertThat(report.products()).extracting(InventoryReportResponse.InventoryProductRow::stockStatus)
@@ -160,7 +194,21 @@ class ReportingServiceTest {
                 grossPrice,
                 discountValue,
                 discounted,
+                null,
+                null,
+                0,
+                quantity,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 discontinued
+        );
+    }
+
+    private static CompanySettingsResponse companySettings() {
+        return new CompanySettingsResponse(
+                1, true, List.of(), "Impresa Test", "CF", "", "", "", "Via Test 1", "80100", "Napoli", "NA", "IT",
+                "Europe/Rome", new BigDecimal("0.22"), "FS", "NC", 4, NOW.atOffset(java.time.ZoneOffset.UTC), "test"
         );
     }
 }

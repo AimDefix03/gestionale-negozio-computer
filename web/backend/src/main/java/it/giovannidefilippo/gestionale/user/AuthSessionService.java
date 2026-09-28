@@ -7,6 +7,8 @@ import it.giovannidefilippo.gestionale.common.ForbiddenException;
 import it.giovannidefilippo.gestionale.common.TimeProvider;
 import it.giovannidefilippo.gestionale.common.UnauthorizedException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,16 +21,18 @@ import java.time.Instant;
 import java.util.Base64;
 
 @Service
-@Transactional(readOnly = true)
+@Transactional
 public class AuthSessionService {
     private static final Duration LOGIN_LOCK_DURATION = Duration.ofMinutes(5);
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int MAX_TOKEN_LENGTH = 256;
+    private static final int LOGIN_ATTEMPT_WRITE_RETRIES = 10;
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final AuthSessionRepository sessionRepository;
     private final UserAccountRepository accountRepository;
     private final LoginAttemptRepository loginAttemptRepository;
+    private final LoginAttemptWriteService loginAttemptWriteService;
     private final TimeProvider timeProvider;
     private final AuditService auditService;
     private final Duration sessionDuration;
@@ -39,6 +43,7 @@ public class AuthSessionService {
             AuthSessionRepository sessionRepository,
             UserAccountRepository accountRepository,
             LoginAttemptRepository loginAttemptRepository,
+            LoginAttemptWriteService loginAttemptWriteService,
             TimeProvider timeProvider,
             AuditService auditService,
             @Value("${gestionale.security.session-duration-minutes:45}") long sessionDurationMinutes,
@@ -48,6 +53,7 @@ public class AuthSessionService {
         this.sessionRepository = sessionRepository;
         this.accountRepository = accountRepository;
         this.loginAttemptRepository = loginAttemptRepository;
+        this.loginAttemptWriteService = loginAttemptWriteService;
         this.timeProvider = timeProvider;
         this.auditService = auditService;
         this.sessionDuration = positiveDuration(sessionDurationMinutes, Duration.ofMinutes(1), "durata sessione");
@@ -59,11 +65,20 @@ public class AuthSessionService {
     }
 
     @Transactional
-    public AuthSessionResponse create(UserResponse user) {
-        return issue(user, timeProvider.instant());
+    public AuthSessionResponse create(UserResponse authentication) {
+        UserAccount account = accountRepository.findById(authentication.id())
+                .orElseThrow(() -> new UnauthorizedException("Account non più disponibile. Effettua di nuovo il login."));
+        if (account.getCredentialVersion() != authentication.credentialVersion()
+                || account.getRole() != authentication.role()
+                || !account.getUsername().equals(authentication.username())
+                || !account.isEnabled()
+                || account.requiresOperationalReview()) {
+            throw new UnauthorizedException("Credenziali modificate. Effettua di nuovo il login.");
+        }
+        return issue(account, timeProvider.instant());
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthSessionResponse rotate(String token) {
         String normalizedToken = normalizeToken(token);
         Instant now = timeProvider.instant();
@@ -71,22 +86,22 @@ public class AuthSessionService {
                 .orElseThrow(() -> new UnauthorizedException("Sessione non valida. Effettua di nuovo il login."));
         UserAccount account = validate(session, now);
         session.revoke(now);
-        AuthSessionResponse response = issue(UserResponse.from(account), now);
+        AuthSessionResponse response = issue(account, now);
         auditService.record(account.getUsername(), account.getRole().getLabel(), "RENEW_SESSION", account.getUsername(), "Sessione rinnovata con rotazione del token", AuditCategory.SECURITY, AuditSeverity.INFO, "SESSION");
         return response;
     }
 
-    private AuthSessionResponse issue(UserResponse user, Instant now) {
+    private AuthSessionResponse issue(UserAccount account, Instant now) {
         String token = token();
         Instant expiresAt = now.plus(sessionDuration);
-        sessionRepository.save(new AuthSession(tokenHash(token), user.username(), user.role(), now, expiresAt));
-        return new AuthSessionResponse(user, token, expiresAt);
+        sessionRepository.save(new AuthSession(tokenHash(token), account, now, expiresAt));
+        return new AuthSessionResponse(UserResponse.from(account), token, expiresAt);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthenticatedUser require(String token) {
         String normalizedToken = normalizeToken(token);
-        AuthSession session = sessionRepository.findByTokenHash(tokenHash(normalizedToken))
+        AuthSession session = sessionRepository.findByTokenHashForUpdate(tokenHash(normalizedToken))
                 .orElse(null);
         if (session == null) {
             throw new UnauthorizedException("Sessione non valida. Effettua di nuovo il login.");
@@ -96,7 +111,7 @@ public class AuthSessionService {
         if (!session.getLastUsedAt().plus(touchInterval).isAfter(now)) {
             session.touch(now);
         }
-        return new AuthenticatedUser(account.getUsername(), account.getRole());
+        return new AuthenticatedUser(account.getId(), account.getUsername(), account.getRole());
     }
 
     public AuthenticatedUser requireManageOperations(String token) {
@@ -111,6 +126,22 @@ public class AuthSessionService {
         return requirePermission(token, UserPermission.MANAGE_ACCOUNTS);
     }
 
+    public AuthenticatedUser requireSuperAdmin(String token) {
+        AuthenticatedUser user = require(token);
+        if (user.role() != UserRole.SUPER_ADMIN) {
+            throw new ForbiddenException("Solo il super admin può eseguire questa operazione.");
+        }
+        return user;
+    }
+
+    public AuthenticatedUser requireCustomer(String token) {
+        AuthenticatedUser user = require(token);
+        if (user.role() != UserRole.CUSTOMER) {
+            throw new ForbiddenException("Questa area e riservata agli account cliente.");
+        }
+        return user;
+    }
+
     public AuthenticatedUser requirePermission(String token, UserPermission permission) {
         AuthenticatedUser user = require(token);
         if (!user.hasPermission(permission)) {
@@ -122,10 +153,15 @@ public class AuthSessionService {
     @Transactional
     public void logout(String token) {
         if (token != null && !token.isBlank()) {
-            sessionRepository.findByTokenHash(tokenHash(token.trim()))
+            sessionRepository.findByTokenHashForUpdate(tokenHash(token.trim()))
                     .filter(session -> !session.isRevoked())
                     .ifPresent(session -> session.revoke(timeProvider.instant()));
         }
+    }
+
+    @Transactional
+    public int revokeAllForAccount(Long accountId) {
+        return sessionRepository.revokeAllActiveByAccountId(accountId, timeProvider.instant());
     }
 
     @Transactional
@@ -144,17 +180,28 @@ public class AuthSessionService {
         }
     }
 
-    @Transactional
     public void registerFailedLogin(String username) {
         String usernameKey = key(username);
         if (usernameKey.isBlank()) {
             return;
         }
         Instant now = timeProvider.instant();
-        LoginAttempt loginAttempt = loginAttemptRepository.findByUsernameKey(usernameKey)
-                .orElseGet(() -> new LoginAttempt(usernameKey, now));
-        loginAttempt.registerFailure(now, MAX_FAILED_ATTEMPTS, LOGIN_LOCK_DURATION);
-        loginAttemptRepository.save(loginAttempt);
+        for (int attempt = 1; attempt <= LOGIN_ATTEMPT_WRITE_RETRIES; attempt++) {
+            try {
+                loginAttemptWriteService.registerFailure(
+                        usernameKey,
+                        now,
+                        MAX_FAILED_ATTEMPTS,
+                        LOGIN_LOCK_DURATION
+                );
+                return;
+            } catch (DataIntegrityViolationException | TransientDataAccessException exception) {
+                if (attempt == LOGIN_ATTEMPT_WRITE_RETRIES) {
+                    throw exception;
+                }
+                Thread.onSpinWait();
+            }
+        }
     }
 
     @Transactional
@@ -194,10 +241,19 @@ public class AuthSessionService {
             session.revoke(now);
             throw new UnauthorizedException("Sessione scaduta per inattivita. Effettua di nuovo il login.");
         }
-        UserAccount account = accountRepository.findByUsernameIgnoreCase(session.getUsername()).orElse(null);
-        if (account == null) {
+        UserAccount account = session.getAccount();
+        if (session.getCredentialVersion() != account.getCredentialVersion()
+                || session.getRole() != account.getRole()) {
             session.revoke(now);
-            throw new UnauthorizedException("Account non piu disponibile. Effettua di nuovo il login.");
+            throw new UnauthorizedException("Credenziali modificate. Effettua di nuovo il login.");
+        }
+        if (!account.isEnabled()) {
+            session.revoke(now);
+            throw new UnauthorizedException("Sessione non valida. Effettua di nuovo il login.");
+        }
+        if (account.requiresOperationalReview()) {
+            session.revoke(now);
+            throw new UnauthorizedException("Sessione non valida. Effettua di nuovo il login.");
         }
         return account;
     }

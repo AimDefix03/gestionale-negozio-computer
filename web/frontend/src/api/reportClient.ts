@@ -1,12 +1,12 @@
 import { request, requestBlob, saveDownloadedFile, toQueryString } from './httpClient';
 import type { InventoryReport, InventoryReportQuery, ReportFormat, SalesReport, SalesReportQuery } from './types';
 
-export function fetchSalesReport(query: SalesReportQuery): Promise<SalesReport> {
-  return request<SalesReport>(`/api/reports/sales${toQueryString(query)}`);
+export function fetchSalesReport(query: SalesReportQuery, signal?: AbortSignal): Promise<SalesReport> {
+  return request<SalesReport>(`/api/reports/sales${toQueryString(query)}`, { signal });
 }
 
-export function fetchInventoryReport(query: InventoryReportQuery): Promise<InventoryReport> {
-  return request<InventoryReport>(`/api/reports/inventory${toQueryString(query)}`);
+export function fetchInventoryReport(query: InventoryReportQuery, signal?: AbortSignal): Promise<InventoryReport> {
+  return request<InventoryReport>(`/api/reports/inventory${toQueryString(query)}`, { signal });
 }
 
 export async function downloadSalesReport(query: SalesReportQuery, format: ReportFormat): Promise<void> {

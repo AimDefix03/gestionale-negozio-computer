@@ -4,6 +4,8 @@ import it.giovannidefilippo.gestionale.company.CompanySettingsRequests;
 import it.giovannidefilippo.gestionale.company.CompanySettingsResponse;
 import it.giovannidefilippo.gestionale.company.CompanySettingsService;
 import it.giovannidefilippo.gestionale.common.ResourceConflictException;
+import it.giovannidefilippo.gestionale.common.TestCompanySettings;
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
 import it.giovannidefilippo.gestionale.order.OrderRequests;
 import it.giovannidefilippo.gestionale.order.OrderResponse;
 import it.giovannidefilippo.gestionale.order.OrderService;
@@ -17,6 +19,7 @@ import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +38,9 @@ class FiscalDocumentCustomerSnapshotTest {
     private ProductService productService;
 
     @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
     private BusinessPartnerService partnerService;
 
     @Autowired
@@ -45,6 +51,11 @@ class FiscalDocumentCustomerSnapshotTest {
 
     @Autowired
     private CompanySettingsService companySettingsService;
+
+    @BeforeEach
+    void configureCompany() {
+        TestCompanySettings.configure(companySettingsService, actor());
+    }
 
     @Test
     void invoiceKeepsCustomerSnapshotEvenIfRegistryChangesLater() {
@@ -113,7 +124,7 @@ class FiscalDocumentCustomerSnapshotTest {
 
         assertThatThrownBy(() -> companySettingsService.update(new CompanySettingsRequests.UpdateRequest(
                 changed.version(), changed.legalName(), changed.taxCode(), changed.vatNumber(), changed.email(), changed.phone(),
-                changed.address(), changed.postalCode(), changed.city(), changed.province(), changed.countryCode(),
+                changed.address(), changed.postalCode(), changed.city(), changed.province(), changed.countryCode(), changed.timeZone(),
                 changed.defaultVatRate(), "FI", changed.creditNotePrefix(), changed.numberPadding()
         ), actor()))
                 .isInstanceOf(ResourceConflictException.class)
@@ -130,10 +141,10 @@ class FiscalDocumentCustomerSnapshotTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                3,
                 new BigDecimal("120.00"),
                 new BigDecimal("0.00")
         ));
+        inventoryService.initialBalance(productCode, 3, "Saldo iniziale snapshot", "test", "Test");
         OrderResponse order = orderService.create(
                 new OrderRequests.CreateOrderRequest(
                         "cliente libero",
@@ -180,7 +191,7 @@ class FiscalDocumentCustomerSnapshotTest {
     ) {
         return new CompanySettingsRequests.UpdateRequest(
                 current.version(), legalName, taxCode, vatNumber, "amministrazione@example.com", "+39 0000000000",
-                "Via Test 1", "80100", "Napoli", "NA", "IT", vatRate,
+                "Via Test 1", "80100", "Napoli", "NA", "IT", current.timeZone(), vatRate,
                 current.invoicePrefix(), current.creditNotePrefix(), current.numberPadding()
         );
     }

@@ -329,6 +329,19 @@ Portare la web app da MVP incompleto a MVP utilizzabile, stabile e predisposto a
    - Rischi: la proposta non rende il prodotto SaaS o vendibile; provider e piattaforma non sono scelti; provisioning o update errati possono causare data leak, downtime o perdita dati; billing e contratti commerciali restano decisioni separate.
    - Note verifica: ADR 0007 e proposta operativa completati con control plane separato, lifecycle cliente a stati, saga persistita, approvazioni, provisioning pooled/dedicato, branding tramite token sicuri, entitlement distinti da permessi e feature flag, manifest release, SemVer, firma, SBOM, provenance, canali, coorti, auto-pause, compatibility matrix, expand/contract, rollback e offboarding. Le fonti tecniche ufficiali sono state consultate il 2026-07-25. Il contratto statico dedicato passa con 4 test dopo aver reso espliciti attivazione, sospensione e pilot pooled/dedicato; `mvn -B -pl web/backend clean verify` passa con 154 test, 18 migrazioni Flyway e JAR prodotto; 32 test frontend e build TypeScript/Vite passano. Nessuna migrazione o modifica runtime introdotta: onboarding SaaS, branding tenant, provisioning e gestione della flotta restano correttamente dichiarati non attivi.
 
+## Roadmap operativa beta
+
+36. `[x]` Step 4.1 - Ordini fornitore.
+37. `[x]` Step 4.2 - Ricezione merce e costo.
+38. `[x]` Step 4.3 - Inventario fisico e rettifiche approvate.
+   - Problema: una rettifica manuale poteva cambiare lo stock senza evidenza del conteggio, approvazione distinta o protezione dai movimenti avvenuti nel frattempo.
+   - File coinvolti: modulo backend `inventory`, `ProductService`, migrazione `V35`, client e pagina React Magazzino, fixture storiche, benchmark WB-007 e documentazione operativa.
+   - Dipendenze: ledger autorevole V24, idempotenza V25, ricezioni e costo V34, permessi backend, audit e lock prodotto.
+   - Test richiesti: carico concorrente tra conteggio e approvazione, doppia e auto-approvazione, stock sotto riserva, sessione attiva duplicata, codici case-insensitive, autorizzazioni, migrazione popolata, UI e build.
+   - Criteri di accettazione: ogni differenza e motivata, approvata da un account distinto, applicata senza perdere movimenti intermedi e collegata al ledger; nessuna rettifica diretta resta disponibile.
+   - Rischi: conteggi su cataloghi molto grandi e operativita multi-magazzino restano fuori dallo scope corrente; la prova con operatore reale e separata dai test automatici.
+   - Note verifica: completato e sincronizzato nel repository reale con 295/295 test backend, 105/105 test PostgreSQL, 202/202 test frontend, typecheck applicativo/E2E, build Vite e upgrade popolati V14/V16/V18 fino a V35. I 61 file autorizzati coincidono byte per byte con lo staging.
+
 ## Test minimi di riferimento
 
 - Backend: `cd web/backend && mvn test`.

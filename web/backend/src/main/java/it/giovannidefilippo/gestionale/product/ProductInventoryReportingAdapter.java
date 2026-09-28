@@ -93,6 +93,13 @@ class ProductInventoryReportingAdapter implements InventoryReportingUsage {
                 product.getPrice(),
                 product.getDiscount(),
                 product.getDiscountedPrice(),
+                product.getLastPurchaseCost(),
+                product.getAveragePurchaseCost(),
+                product.getCostedQuantity(),
+                product.getUncostedQuantity(),
+                product.getCostCoveragePercentage(),
+                product.getKnownInventoryCost(),
+                product.getPotentialGrossMarginOnCostedStock(),
                 product.isDiscontinued()
         );
     }

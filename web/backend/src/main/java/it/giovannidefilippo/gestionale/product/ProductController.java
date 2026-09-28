@@ -43,33 +43,33 @@ class ProductController {
             @RequestParam(required = false) String stock,
             @RequestParam(required = false) String sort
     ) {
-        authSessionService.requirePermission(token, UserPermission.VIEW_CATALOG);
-        return service.search(q, category, brand, productType, stock, sort, page, size);
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
+        return service.search(q, category, brand, productType, stock, sort, page, size, actor);
     }
 
     @GetMapping("/lookup")
     List<ProductLookupResponse> lookup(@RequestHeader(value = "X-Session-Token", required = false) String token) {
-        authSessionService.requirePermission(token, UserPermission.VIEW_CATALOG);
+        authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
         return service.lookup();
     }
 
     @GetMapping("/{code}")
     ProductResponse findByCode(@PathVariable String code, @RequestHeader(value = "X-Session-Token", required = false) String token) {
-        authSessionService.requirePermission(token, UserPermission.VIEW_CATALOG);
-        return service.findByCode(code);
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
+        return service.findByCode(code, actor);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     ProductResponse create(@Valid @RequestBody ProductRequest request, @RequestHeader(value = "X-Session-Token", required = false) String token) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_PRODUCTS);
-        return service.create(request, actor.username(), actor.roleLabel());
+        return service.create(request, actor);
     }
 
     @PutMapping("/{code}")
     ProductResponse update(@PathVariable String code, @Valid @RequestBody ProductRequest request, @RequestHeader(value = "X-Session-Token", required = false) String token) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_PRODUCTS);
-        return service.update(code, request, actor.username(), actor.roleLabel());
+        return service.update(code, request, actor);
     }
 
     @DeleteMapping("/{code}")
@@ -82,7 +82,7 @@ class ProductController {
     @PostMapping("/{code}/discontinue")
     ProductResponse discontinue(@PathVariable String code, @RequestHeader(value = "X-Session-Token", required = false) String token) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_PRODUCTS);
-        return service.discontinue(code, actor.username(), actor.roleLabel());
+        return service.discontinue(code, actor);
     }
 
     @PostMapping("/bulk-delete")

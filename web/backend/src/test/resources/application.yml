@@ -39,5 +39,5 @@ gestionale:
   bootstrap:
     super-admin:
       enabled: true
-      username: admin
-      password: RootSecure123!
+      username: test_super_admin
+      password: Test-Bootstrap-9842!

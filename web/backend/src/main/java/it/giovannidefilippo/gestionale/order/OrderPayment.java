@@ -66,6 +66,20 @@ public class OrderPayment {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    private LocalDateTime reconciledAt;
+
+    @Column(length = 120)
+    private String reconciledBy;
+
+    @Column(length = 80)
+    private String reconciledByRole;
+
+    @Column(length = 120)
+    private String reconciliationReference;
+
+    @Column(length = 500)
+    private String reconciliationReason;
+
     @Version
     private long version;
 
@@ -91,15 +105,10 @@ public class OrderPayment {
         this.order = Objects.requireNonNull(order);
     }
 
-    void cancel(LocalDateTime changedAt) {
-        if (status != PaymentStatus.PENDING) {
-            throw new IllegalStateException("Puoi annullare direttamente solo un pagamento in attesa.");
-        }
-        status = PaymentStatus.CANCELED;
-        updatedAt = Objects.requireNonNull(changedAt);
-    }
-
     PaymentTransaction recordReceipt(String transactionCode, BigDecimal amount, String reference, String reason, LocalDateTime changedAt, String actor, String actorRole) {
+        if (status == PaymentStatus.UNRECONCILED) {
+            throw new IllegalStateException("Riconcilia il pagamento storico prima di registrare nuovi incassi.");
+        }
         if (status == PaymentStatus.CANCELED || status == PaymentStatus.FAILED) {
             throw new IllegalStateException("Il pagamento non accetta nuovi incassi.");
         }
@@ -107,24 +116,86 @@ public class OrderPayment {
         if (value.compareTo(getOutstandingAmount()) > 0) {
             throw new IllegalArgumentException("L'incasso supera il saldo residuo dell'ordine.");
         }
-        PaymentTransaction transaction = new PaymentTransaction(transactionCode, PaymentTransactionType.RECEIPT, value, reference, reason, "", changedAt, actor, actorRole);
+        PaymentTransaction transaction = PaymentTransaction.receipt(transactionCode, value, reference, reason, changedAt, actor, actorRole);
         addTransaction(transaction);
-        paidAmount = paidAmount.add(value).setScale(2, RoundingMode.HALF_UP);
+        synchronizeBalancesFromLedger();
         updateStatusAfterReceipt();
         updatedAt = changedAt;
         return transaction;
     }
 
-    PaymentTransaction recordRefund(String transactionCode, String returnCode, BigDecimal amount, String reference, String reason, LocalDateTime changedAt, String actor, String actorRole) {
+    void reconcile(String transactionCode, BigDecimal verifiedPaidAmount, String reference, String reason, LocalDateTime changedAt, String actor, String actorRole) {
+        if (status != PaymentStatus.UNRECONCILED) {
+            throw new IllegalStateException("Il pagamento non richiede una riconciliazione.");
+        }
+        BigDecimal verifiedAmount = money(verifiedPaidAmount);
+        if (verifiedAmount.compareTo(requestedAmount) > 0) {
+            throw new IllegalArgumentException("L'importo verificato supera il totale dell'ordine.");
+        }
+        if (verifiedAmount.signum() > 0) {
+            addTransaction(PaymentTransaction.reconciliation(
+                    transactionCode,
+                    verifiedAmount,
+                    reference,
+                    reason,
+                    changedAt,
+                    actor,
+                    actorRole
+            ));
+        }
+        synchronizeBalancesFromLedger();
+        status = verifiedAmount.signum() == 0
+                ? PaymentStatus.PENDING
+                : verifiedAmount.compareTo(requestedAmount) == 0 ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
+        reconciledAt = Objects.requireNonNull(changedAt);
+        reconciledBy = required(actor, "L'operatore di riconciliazione e obbligatorio.");
+        reconciledByRole = required(actorRole, "Il ruolo dell'operatore di riconciliazione e obbligatorio.");
+        reconciliationReference = optional(reference);
+        reconciliationReason = required(reason, "La motivazione della riconciliazione e obbligatoria.");
+        updatedAt = changedAt;
+    }
+
+    PaymentTransaction recordRefund(String transactionCode, OrderReturn orderReturn, BigDecimal amount, String reference, String reason, LocalDateTime changedAt, String actor, String actorRole) {
         BigDecimal value = positiveMoney(amount);
         if (value.compareTo(getRefundableAmount()) > 0) {
             throw new IllegalArgumentException("Il rimborso supera l'importo netto incassato.");
         }
-        PaymentTransaction transaction = new PaymentTransaction(transactionCode, PaymentTransactionType.REFUND, value, reference, reason, returnCode, changedAt, actor, actorRole);
+        PaymentTransaction transaction = PaymentTransaction.refund(transactionCode, orderReturn, value, reference, reason, changedAt, actor, actorRole);
         addTransaction(transaction);
-        refundedAmount = refundedAmount.add(value).setScale(2, RoundingMode.HALF_UP);
+        synchronizeBalancesFromLedger();
         status = refundedAmount.compareTo(paidAmount) == 0 ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
         updatedAt = changedAt;
+        return transaction;
+    }
+
+    boolean requiresCancellationReversal() {
+        requireCancellationState();
+        return getNetPaidAmount().signum() > 0;
+    }
+
+    PaymentTransaction cancelForOrder(Long orderId, String transactionCode, String reference, String reason, LocalDateTime changedAt, String actor, String actorRole) {
+        requireCancellationState();
+        LocalDateTime operationTime = Objects.requireNonNull(changedAt);
+        BigDecimal netPaidAmount = getNetPaidAmount();
+        if (netPaidAmount.signum() == 0) {
+            status = PaymentStatus.CANCELED;
+            updatedAt = operationTime;
+            return null;
+        }
+        PaymentTransaction transaction = PaymentTransaction.reversal(
+                transactionCode,
+                Objects.requireNonNull(orderId),
+                netPaidAmount,
+                required(reference, "Il riferimento dello storno e obbligatorio per annullare un ordine incassato."),
+                reason,
+                operationTime,
+                actor,
+                actorRole
+        );
+        addTransaction(transaction);
+        synchronizeBalancesFromLedger();
+        status = PaymentStatus.REFUNDED;
+        updatedAt = operationTime;
         return transaction;
     }
 
@@ -137,11 +208,32 @@ public class OrderPayment {
     public BigDecimal getRefundedAmount() { return refundedAmount; }
     public BigDecimal getNetPaidAmount() { return paidAmount.subtract(refundedAmount).setScale(2, RoundingMode.HALF_UP); }
     public BigDecimal getRefundableAmount() { return getNetPaidAmount(); }
-    public BigDecimal getOutstandingAmount() { return requestedAmount.subtract(paidAmount).setScale(2, RoundingMode.HALF_UP); }
+    public BigDecimal getOutstandingAmount() {
+        if (status == PaymentStatus.CANCELED || status == PaymentStatus.REFUNDED) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return requestedAmount.subtract(paidAmount).setScale(2, RoundingMode.HALF_UP);
+    }
     public String getCurrency() { return currency; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public boolean isReconciliationRequired() { return status == PaymentStatus.UNRECONCILED; }
+    public LocalDateTime getReconciledAt() { return reconciledAt; }
+    public String getReconciledBy() { return reconciledBy; }
+    public String getReconciledByRole() { return reconciledByRole; }
+    public String getReconciliationReference() { return reconciliationReference; }
+    public String getReconciliationReason() { return reconciliationReason; }
     public List<PaymentTransaction> getTransactions() { return List.copyOf(transactions); }
+
+    BigDecimal refundedForReturn(OrderReturn orderReturn) {
+        return transactions.stream()
+                .filter(transaction -> transaction.getType() == PaymentTransactionType.REFUND)
+                .filter(transaction -> Objects.equals(transaction.getReturnId(), orderReturn.getId())
+                        || transaction.getReturnCode() != null && transaction.getReturnCode().equalsIgnoreCase(orderReturn.getCode()))
+                .map(PaymentTransaction::getAmount)
+                .reduce(zero(), BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
 
     private void addTransaction(PaymentTransaction transaction) {
         transaction.assignPayment(this);
@@ -150,6 +242,35 @@ public class OrderPayment {
 
     private void updateStatusAfterReceipt() {
         status = paidAmount.compareTo(requestedAmount) == 0 ? PaymentStatus.PAID : PaymentStatus.PARTIALLY_PAID;
+    }
+
+    private void synchronizeBalancesFromLedger() {
+        paidAmount = transactions.stream()
+                .filter(transaction -> transaction.getType() == PaymentTransactionType.RECEIPT || transaction.getType() == PaymentTransactionType.RECONCILIATION)
+                .map(PaymentTransaction::getAmount)
+                .reduce(zero(), BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+        refundedAmount = transactions.stream()
+                .filter(transaction -> transaction.getType() == PaymentTransactionType.REFUND || transaction.getType() == PaymentTransactionType.REVERSAL)
+                .map(PaymentTransaction::getAmount)
+                .reduce(zero(), BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal zero() {
+        return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void requireCancellationState() {
+        if (status == PaymentStatus.UNRECONCILED) {
+            throw new IllegalStateException("Riconcilia il pagamento storico prima di annullare l'ordine.");
+        }
+        if (status != PaymentStatus.PENDING
+                && status != PaymentStatus.FAILED
+                && status != PaymentStatus.PARTIALLY_PAID
+                && status != PaymentStatus.PAID) {
+            throw new IllegalStateException("Lo stato del pagamento non consente l'annullamento dell'ordine.");
+        }
     }
 
     private static BigDecimal positiveMoney(BigDecimal value) {
@@ -166,5 +287,16 @@ public class OrderPayment {
             throw new IllegalArgumentException("L'importo richiesto non puo essere negativo.");
         }
         return amount;
+    }
+
+    private static String required(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
+    }
+
+    private static String optional(String value) {
+        return value == null ? "" : value.trim();
     }
 }

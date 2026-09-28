@@ -1,17 +1,17 @@
 package it.giovannidefilippo.gestionale.product;
 
-import jakarta.persistence.OptimisticLockException;
+import it.giovannidefilippo.gestionale.inventory.InventoryReconciliationStatus;
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
+import it.giovannidefilippo.gestionale.inventory.InventoryTestSupport;
+import it.giovannidefilippo.gestionale.common.PostgreSqlIntegrationTestSupport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -20,77 +20,48 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-class ProductStockConcurrencyTest {
+@Tag("postgresql")
+class ProductStockConcurrencyTest extends PostgreSqlIntegrationTestSupport {
     @Autowired
     private ProductService service;
 
     @Autowired
-    private ProductRepository repository;
-
-    @Autowired
-    private TransactionTemplate transactionTemplate;
+    private InventoryService inventoryService;
 
     @Test
-    void optimisticLockingPreventsConcurrentStockOverwrite() throws Exception {
+    void concurrentReservationAndAdjustmentPreserveStockInvariantAndLedger() throws Exception {
         String code = "CONC-" + UUID.randomUUID().toString().substring(0, 8);
-        service.create(request(code, 1));
+        InventoryTestSupport.createProductWithStock(service, inventoryService, request(code), 2);
 
-        CountDownLatch loaded = new CountDownLatch(2);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Callable<Boolean> task = () -> unloadOneUnitFromStaleSnapshot(code, loaded);
-            Future<Boolean> first = executor.submit(task);
-            Future<Boolean> second = executor.submit(task);
+            Future<Boolean> reservation = executor.submit(() -> execute(() -> service.reserveStock(code, 2)));
+            Future<Boolean> adjustment = executor.submit(() -> execute(() -> inventoryService.adjust(code, -1, "Rettifica concorrente", "test", "Test")));
 
-            assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
+            assertThat(List.of(reservation.get(5, TimeUnit.SECONDS), adjustment.get(5, TimeUnit.SECONDS)))
                     .containsExactlyInAnyOrder(true, false);
-            assertThat(service.findByCode(code).quantity()).isZero();
+            ProductResponse product = service.findByCode(code);
+            assertThat(product.quantity()).isGreaterThanOrEqualTo(product.reservedQuantity());
+            assertThat(inventoryService.reconciliation().items())
+                    .filteredOn(item -> item.productCode().equals(code))
+                    .singleElement()
+                    .extracting(item -> item.status())
+                    .isEqualTo(InventoryReconciliationStatus.BALANCED);
         } finally {
             executor.shutdownNow();
         }
     }
 
-    private boolean unloadOneUnitFromStaleSnapshot(String code, CountDownLatch loaded) {
+    private boolean execute(Runnable operation) {
         try {
-            transactionTemplate.executeWithoutResult(status -> {
-                Product product = repository.findByCodeForStockAdjustment(code).orElseThrow();
-                loaded.countDown();
-                await(loaded);
-                product.updateQuantity(product.getQuantity() - 1);
-                repository.flush();
-            });
+            operation.run();
             return true;
         } catch (RuntimeException exception) {
-            if (isOptimisticLockFailure(exception)) {
-                return false;
-            }
-            throw exception;
+            return false;
         }
     }
 
-    private static boolean isOptimisticLockFailure(Throwable exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof OptimisticLockingFailureException || current instanceof OptimisticLockException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            if (!latch.await(5, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("Timeout durante la simulazione concorrente.");
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Test concorrente interrotto.", exception);
-        }
-    }
-
-    private ProductRequest request(String code, int quantity) {
+    private ProductRequest request(String code) {
         return new ProductRequest(
                 code,
                 "Prodotto concorrente",
@@ -99,7 +70,6 @@ class ProductStockConcurrencyTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                quantity,
                 new BigDecimal("100.00"),
                 new BigDecimal("0.00")
         );

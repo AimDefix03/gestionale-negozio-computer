@@ -28,6 +28,7 @@ public final class CompanySettingsRequests {
             @Size(max = 120) String city,
             @Size(max = 8) String province,
             @Pattern(regexp = "^$|^[A-Za-z]{2}$", message = "Il paese deve essere un codice ISO di due lettere.") String countryCode,
+            @NotBlank @Size(max = 64) String timeZone,
             @NotNull @DecimalMin("0.0000") @DecimalMax("1.0000") BigDecimal defaultVatRate,
             @NotBlank @Pattern(regexp = "^[A-Za-z0-9]{1,8}$", message = "Il prefisso fattura deve contenere da 1 a 8 caratteri alfanumerici.") String invoicePrefix,
             @NotBlank @Pattern(regexp = "^[A-Za-z0-9]{1,8}$", message = "Il prefisso nota credito deve contenere da 1 a 8 caratteri alfanumerici.") String creditNotePrefix,

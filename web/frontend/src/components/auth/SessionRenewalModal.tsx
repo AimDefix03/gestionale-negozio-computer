@@ -1,4 +1,5 @@
-import { FormEvent } from 'react';
+import { FormEvent, useRef } from 'react';
+import AccessibleDialog from '../common/AccessibleDialog';
 
 type Props = {
   message: string;
@@ -10,23 +11,28 @@ type Props = {
 };
 
 export default function SessionRenewalModal({ message, password, busy, onPasswordChange, onSubmit, onLogout }: Props) {
+  const passwordRef = useRef<HTMLInputElement>(null);
+
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section className="session-modal" role="dialog" aria-modal="true" aria-labelledby="session-renewal-title">
+    <AccessibleDialog
+      className="session-modal"
+      labelledBy="session-renewal-title"
+      describedBy="session-renewal-description"
+      initialFocusRef={passwordRef}
+    >
         <div className="section-heading compact">
           <span>Sessione</span>
           <h2 id="session-renewal-title">Riconferma accesso</h2>
-          <p>La schermata resta aperta. Inserisci la password per rinnovare la sessione e continuare.</p>
+          <p id="session-renewal-description">La schermata resta aperta. Inserisci la password per rinnovare la sessione e continuare.</p>
         </div>
         {message && <div className="alert" role="alert">{message}</div>}
         <form className="form-grid single" onSubmit={onSubmit}>
-          <label>Password<input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoComplete="current-password" autoFocus required /></label>
+          <label>Password<input ref={passwordRef} type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} autoComplete="current-password" required /></label>
           <div className="form-actions">
             <button className="button secondary" type="button" onClick={onLogout}>Esci</button>
             <button className="button primary" type="submit" disabled={busy}>{busy ? 'Verifica...' : 'Rinnova sessione'}</button>
           </div>
         </form>
-      </section>
-    </div>
+    </AccessibleDialog>
   );
 }

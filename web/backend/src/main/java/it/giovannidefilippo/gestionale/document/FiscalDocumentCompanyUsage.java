@@ -15,4 +15,9 @@ class FiscalDocumentCompanyUsage implements DocumentNumberingUsage {
     public boolean existsForFiscalYear(int fiscalYear) {
         return repository.existsByFiscalYear(fiscalYear);
     }
+
+    @Override
+    public boolean existsAny() {
+        return repository.count() > 0;
+    }
 }

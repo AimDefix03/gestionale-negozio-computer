@@ -22,8 +22,8 @@ class ModularArchitectureTest {
     void businessModulesHaveValidDependencies() {
         ApplicationModules modules = ApplicationModules.of(GestionaleApiApplication.class, TECHNICAL_PACKAGES);
 
-        assertThat(modules.stream().map(module -> module.getName()).toList())
-                .containsExactlyInAnyOrder("company", "document", "inventory", "order", "partner", "product", "reporting", "user");
+        assertThat(modules.stream().map(module -> module.getIdentifier().toString()).toList())
+                .containsExactlyInAnyOrder("company", "document", "inventory", "order", "partner", "product", "purchase", "reporting", "user");
         modules.verify();
     }
 }

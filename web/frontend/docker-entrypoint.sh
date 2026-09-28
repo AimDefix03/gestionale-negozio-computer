@@ -4,20 +4,36 @@ set -eu
 NGINX_LOGIN_RATE=${NGINX_LOGIN_RATE:-10r/m}
 NGINX_LOGIN_BURST=${NGINX_LOGIN_BURST:-10}
 NGINX_LOGIN_RETRY_AFTER_SECONDS=${NGINX_LOGIN_RETRY_AFTER_SECONDS:-60}
+NGINX_REGISTER_RATE=${NGINX_REGISTER_RATE:-5r/m}
+NGINX_REGISTER_BURST=${NGINX_REGISTER_BURST:-5}
+NGINX_REGISTER_RETRY_AFTER_SECONDS=${NGINX_REGISTER_RETRY_AFTER_SECONDS:-60}
 
-if ! printf '%s\n' "$NGINX_LOGIN_RATE" | grep -Eq '^[1-9][0-9]*r/[smh]$'; then
-  printf 'Configurazione NGINX_LOGIN_RATE non valida.\n' >&2
-  exit 78
-fi
+for value in "$NGINX_LOGIN_RATE" "$NGINX_REGISTER_RATE"; do
+  if ! printf '%s\n' "$value" | grep -Eq '^[1-9][0-9]*r/[smh]$'; then
+    printf 'Configurazione rate limit Nginx non valida.\n' >&2
+    exit 78
+  fi
+done
 
-for value in "$NGINX_LOGIN_BURST" "$NGINX_LOGIN_RETRY_AFTER_SECONDS"; do
+for value in \
+  "$NGINX_LOGIN_BURST" \
+  "$NGINX_LOGIN_RETRY_AFTER_SECONDS" \
+  "$NGINX_REGISTER_BURST" \
+  "$NGINX_REGISTER_RETRY_AFTER_SECONDS"
+do
   if ! printf '%s\n' "$value" | grep -Eq '^[1-9][0-9]*$'; then
     printf 'Configurazione numerica Nginx non valida.\n' >&2
     exit 78
   fi
 done
 
-export NGINX_LOGIN_RATE NGINX_LOGIN_BURST NGINX_LOGIN_RETRY_AFTER_SECONDS
+export \
+  NGINX_LOGIN_RATE \
+  NGINX_LOGIN_BURST \
+  NGINX_LOGIN_RETRY_AFTER_SECONDS \
+  NGINX_REGISTER_RATE \
+  NGINX_REGISTER_BURST \
+  NGINX_REGISTER_RETRY_AFTER_SECONDS
 
 mkdir -p \
   /tmp/nginx-client-body \
@@ -26,7 +42,7 @@ mkdir -p \
   /tmp/nginx-uwsgi \
   /tmp/nginx-scgi
 
-envsubst '${NGINX_LOGIN_RATE} ${NGINX_LOGIN_BURST} ${NGINX_LOGIN_RETRY_AFTER_SECONDS}' \
+envsubst '${NGINX_LOGIN_RATE} ${NGINX_LOGIN_BURST} ${NGINX_LOGIN_RETRY_AFTER_SECONDS} ${NGINX_REGISTER_RATE} ${NGINX_REGISTER_BURST} ${NGINX_REGISTER_RETRY_AFTER_SECONDS}' \
   < /etc/nginx/templates/default.conf.template \
   > /tmp/default.conf
 

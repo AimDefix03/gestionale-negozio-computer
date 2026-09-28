@@ -12,7 +12,7 @@ class UserServiceTransactionTest {
     @Test
     void loginUsesWritableTransactionBecauseItRecordsSecurityEvents() throws Exception {
         Transactional classTransaction = UserService.class.getAnnotation(Transactional.class);
-        Method login = UserService.class.getDeclaredMethod("login", String.class, String.class, UserRole.class);
+        Method login = UserService.class.getDeclaredMethod("login", String.class, String.class);
         Transactional loginTransaction = login.getAnnotation(Transactional.class);
 
         assertThat(classTransaction).isNotNull();

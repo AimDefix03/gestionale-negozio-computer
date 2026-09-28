@@ -3,7 +3,6 @@ package it.giovannidefilippo.gestionale.common;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import it.giovannidefilippo.gestionale.user.UserService;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -16,7 +15,7 @@ class SeedAdminInitializerTest {
     void emptyDatabaseRequiresExplicitBootstrap() {
         UserService userService = mock(UserService.class);
         when(userService.hasAccounts()).thenReturn(false);
-        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, new MockEnvironment(), false, "", "");
+        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, false, "", "");
 
         assertThatThrownBy(initializer::run)
                 .isInstanceOf(IllegalStateException.class)
@@ -29,18 +28,18 @@ class SeedAdminInitializerTest {
     void bootstrapCreatesSuperAdminWhenDatabaseIsEmpty() {
         UserService userService = mock(UserService.class);
         when(userService.hasAccounts()).thenReturn(false);
-        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, new MockEnvironment(), true, "admin", "RootSecure123!");
+        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, true, "initial_super_admin", "Initial-Atlas-9842!");
 
         initializer.run();
 
-        verify(userService).createAccount("admin", "RootSecure123!", UserRole.SUPER_ADMIN, "Sistema", "Bootstrap super admin iniziale da configurazione ambiente");
+        verify(userService).createAccount("initial_super_admin", "Initial-Atlas-9842!", UserRole.SUPER_ADMIN, "Sistema", "Bootstrap super admin iniziale da configurazione ambiente");
     }
 
     @Test
     void bootstrapIsIgnoredWhenAccountsAlreadyExist() {
         UserService userService = mock(UserService.class);
         when(userService.hasAccounts()).thenReturn(true);
-        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, new MockEnvironment(), true, "admin", "RootSecure123!");
+        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, true, "admin", "RootSecure123!");
 
         initializer.run();
 
@@ -48,12 +47,10 @@ class SeedAdminInitializerTest {
     }
 
     @Test
-    void productionBootstrapRejectsLocalDefaultCredentials() {
+    void bootstrapRejectsKnownLocalCredentialsWithoutDependingOnProfile() {
         UserService userService = mock(UserService.class);
         when(userService.hasAccounts()).thenReturn(false);
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, environment, true, "root_admin", "RootSecure123!");
+        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, true, "root_admin", "RootSecure123!");
 
         assertThatThrownBy(initializer::run)
                 .isInstanceOf(IllegalStateException.class)
@@ -61,12 +58,10 @@ class SeedAdminInitializerTest {
     }
 
     @Test
-    void productionBootstrapRequiresStrongPassword() {
+    void bootstrapRequiresStrongPasswordWithoutDependingOnProfile() {
         UserService userService = mock(UserService.class);
         when(userService.hasAccounts()).thenReturn(false);
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, environment, true, "root_admin", "Password1!");
+        SeedAdminInitializer initializer = new SeedAdminInitializer(userService, true, "root_admin", "Password1!");
 
         assertThatThrownBy(initializer::run)
                 .isInstanceOf(IllegalStateException.class)

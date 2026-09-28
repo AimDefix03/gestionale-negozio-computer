@@ -1,56 +1,53 @@
-import { useState } from 'react';
-import { Order, OrderQuery, PageResponse, ReceiptPayload, ReturnRefundPayload, ReturnRequestPayload, UserAccount } from '../api';
+import { CancellationPayload, FinancialReconciliation, Order, OrderOperationalDetail, OrderQuery, PageResponse, ReceiptPayload, ReturnRefundPayload, ReturnRequestPayload, UserAccount } from '../api';
 import PaginationControls from '../components/PaginationControls';
 import DataList from '../components/common/DataList';
 import OrderOperationsPanel from '../components/orders/OrderOperationsPanel';
+import FinancialReconciliationPanel from '../components/orders/FinancialReconciliationPanel';
+import { CommandOutcome } from '../hooks/useCommandExecution';
 import { dateTime, money, orderStatusClass } from '../utils/formatters';
 
 type Props = {
   page: PageResponse<Order>;
   query: OrderQuery;
   currentUser: UserAccount;
-  canManageDocuments: boolean;
-  canRecordPayments: boolean;
-  canRequestReturns: boolean;
-  canManageReturns: boolean;
-  canRefundPayments: boolean;
+  financialReconciliation: FinancialReconciliation | null;
+  selectedDetail: OrderOperationalDetail | null;
+  detailLoading: boolean;
+  detailError: unknown;
   busy: boolean;
   pageSize: number;
-  canConfirm: (order: Order) => boolean;
-  canFulfill: (order: Order) => boolean;
-  canCancel: (order: Order) => boolean;
   onQueryChange: (query: OrderQuery) => void;
+  onSelect: (code: string) => void;
   onConfirm: (code: string) => void;
   onFulfill: (code: string) => void;
-  onCancel: (code: string) => void;
+  onCancel: (code: string, payload: CancellationPayload) => void;
   onInvoice: (code: string) => void;
   onReceipt: (code: string, payload: ReceiptPayload) => void;
-  onRequestReturn: (code: string, payload: ReturnRequestPayload) => void;
-  onApproveReturn: (orderCode: string, returnCode: string, note: string) => void;
-  onRejectReturn: (orderCode: string, returnCode: string, note: string) => void;
-  onReceiveReturn: (orderCode: string, returnCode: string) => void;
-  onRefundReturn: (orderCode: string, returnCode: string, payload: ReturnRefundPayload) => void;
+  onRequestReturn: (code: string, payload: ReturnRequestPayload) => Promise<CommandOutcome>;
+  onApproveReturn: (orderCode: string, returnCode: string, note: string) => Promise<CommandOutcome>;
+  onRejectReturn: (orderCode: string, returnCode: string, note: string) => Promise<CommandOutcome>;
+  onReceiveReturn: (orderCode: string, returnCode: string) => Promise<CommandOutcome>;
+  onRefundReturn: (orderCode: string, returnCode: string, payload: ReturnRefundPayload) => Promise<CommandOutcome>;
 };
 
 export default function OrdersPage(props: Props) {
-  const [selectedCode, setSelectedCode] = useState('');
-  const selectedOrder = props.page.content.find((order) => order.code === selectedCode) ?? null;
+  const selectedOrder = props.selectedDetail?.order ?? null;
 
   return (
     <>
+      {props.financialReconciliation && <FinancialReconciliationPanel reconciliation={props.financialReconciliation} />}
       <DataList
       title="Ordini"
+      columns={['Codice', 'Codice cliente', 'Cliente', 'Stato', 'Totale', 'Pagamento', 'Data']}
       rows={props.page.content.map((order) => [order.code, order.customerCode || '-', order.customer, <span className={`status-badge ${orderStatusClass(order.status)}`}>{order.statusLabel}</span>, money.format(order.total), <span>{order.payment.methodLabel}<small className="cell-note">{order.payment.statusLabel}</small></span>, dateTime.format(new Date(order.timestamp))])}
       actions={(orderCode) => {
         const order = props.page.content.find((item) => item.code === orderCode);
         if (!order) return null;
         return (
           <div className="row-actions">
-            {props.canConfirm(order) && <button className="link-button" onClick={() => props.onConfirm(order.code)}>Conferma</button>}
-            {props.canFulfill(order) && <button className="link-button" onClick={() => props.onFulfill(order.code)}>Evadi</button>}
-            {props.canCancel(order) && <button className="link-button danger-text" onClick={() => props.onCancel(order.code)}>Annulla</button>}
-            {props.canManageDocuments && order.status === 'FULFILLED' && <button className="link-button" onClick={() => props.onInvoice(order.code)}>Fattura</button>}
-            <button className="link-button" onClick={() => setSelectedCode(order.code)}>Operazioni</button>
+            {order.capabilities.canConfirm && <button className="link-button" disabled={props.busy} onClick={() => props.onConfirm(order.code)}>Conferma</button>}
+            {order.capabilities.canFulfill && <button className="link-button" disabled={props.busy} onClick={() => props.onFulfill(order.code)}>Evadi</button>}
+            <button className="link-button" onClick={() => props.onSelect(order.code)}>Operazioni</button>
           </div>
         );
       }}
@@ -64,11 +61,13 @@ export default function OrdersPage(props: Props) {
       </DataList>
       <OrderOperationsPanel
         order={selectedOrder}
+        capabilities={selectedOrder?.capabilities ?? null}
+        documents={props.selectedDetail?.documents ?? null}
+        loading={props.detailLoading}
+        error={props.detailError}
         busy={props.busy}
-        canRecordPayments={props.canRecordPayments}
-        canRequestReturns={props.canRequestReturns}
-        canManageReturns={props.canManageReturns}
-        canRefundPayments={props.canRefundPayments}
+        onInvoice={props.onInvoice}
+        onCancel={props.onCancel}
         onReceipt={props.onReceipt}
         onRequestReturn={props.onRequestReturn}
         onApproveReturn={props.onApproveReturn}

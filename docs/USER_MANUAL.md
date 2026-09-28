@@ -15,21 +15,15 @@ Il gestionale produce documenti simulati per finalita operative e dimostrative. 
 1. Aprire l'indirizzo comunicato dall'amministratore del sistema.
 2. Selezionare `Login`.
 3. Inserire username e password.
-4. Selezionare il ruolo associato all'account.
-5. Premere `Accedi`.
+4. Premere `Accedi`.
 
-Il ruolo selezionato deve coincidere con quello registrato per l'account. In caso contrario l'accesso viene rifiutato.
+Ruolo e permessi vengono determinati dal backend in base all'account autenticato; l'utente non li dichiara durante il login.
 
 Tentativi di accesso errati ripetuti possono produrre un blocco temporaneo. Non continuare a provare password casuali: attendere il termine indicato dal messaggio oppure contattare un amministratore.
 
 ### Registrazione pubblica
 
-La registrazione pubblica permette di creare esclusivamente:
-
-- un account `Dipendente`;
-- un account `Cliente`.
-
-Non e possibile registrarsi pubblicamente come admin o super admin. Gli account admin vengono creati esclusivamente da un super admin autenticato.
+La registrazione pubblica permette di creare esclusivamente un account `Cliente`. Gli account dipendente e admin vengono creati dal flusso amministrativo autorizzato; un nuovo admin puo essere creato soltanto da un super admin autenticato.
 
 La password deve:
 
@@ -65,11 +59,15 @@ Usare `Logout` al termine del lavoro, soprattutto su dispositivi condivisi.
 La barra superiore e organizzata in menu orizzontali:
 
 - `Workspace`: Dashboard, Catalogo prodotti e Anagrafiche quando autorizzate;
-- `Operazioni`: Magazzino, Ordini, Documenti e Report secondo i permessi;
+- `Operazioni`: Magazzino, Ordini cliente, Ordini fornitore, Documenti e Report secondo i permessi;
 - `Amministrazione`: Account, Configurazione azienda, Monitoraggio e Audit log;
 - `Sessione`: aggiornamento dati e logout.
 
 Ogni voce aperta crea una scheda nel workspace. E possibile passare da una scheda all'altra o chiuderla senza uscire dalla sessione. Il comando `Aggiorna dati` ricarica le informazioni operative dal server.
+
+Le schede possono essere percorse da tastiera con `Freccia sinistra`, `Freccia destra`, `Home` ed `End`. I menu si aprono con `Invio` o `Spazio` e si chiudono con `Escape`; dopo la chiusura il focus torna al controllo di origine. I dialog mantengono il focus al proprio interno fino alla conferma o all'annullamento.
+
+I form operativi conservano una bozza per vista ed entita nella sessione del browser. Un punto accanto al titolo della scheda segnala dati non completati. Se si cambia vista, si chiude la scheda, si esce dal gestionale o si chiude la pagina, il sistema chiede conferma senza perdere automaticamente la bozza. Le password non vengono salvate nelle bozze. Il salvataggio e locale al browser e non sostituisce la registrazione del comando sul server.
 
 ## Ruoli e responsabilita
 
@@ -80,6 +78,7 @@ Ogni voce aperta crea una scheda nel workspace. E possibile passare da una sched
 | Gestire magazzino | Si | Si | Si | No |
 | Consultare anagrafiche | Si | Si | Si | No |
 | Gestire anagrafiche | Si | Si | Si | No |
+| Consultare e gestire ordini fornitore | Si | Si | Si | No |
 | Consultare ordini | Tutti | Tutti | Tutti | Solo propri |
 | Confermare ordini | Si | Si | Si | Solo propri |
 | Evadere ordini | Si | Si | Si | No |
@@ -101,9 +100,10 @@ Il frontend nasconde le funzioni non autorizzate. Il backend verifica comunque o
 La Dashboard offre una sintesi di:
 
 - prodotti presenti;
-- valore inventario;
+- valore potenziale di vendita, che non e una valorizzazione contabile dell'inventario;
 - scorte basse ed esaurite;
-- ordini e valore complessivo;
+- ordini in bozza, confermati, evasi e annullati;
+- incassato lordo, rimborsato o stornato e incassato netto;
 - ordini recenti;
 - movimenti di magazzino recenti.
 
@@ -132,7 +132,7 @@ Il codice identifica stabilmente il prodotto. Scegliere un codice coerente prima
 - L'eliminazione e bloccata se il prodotto e collegato a ordini o ha quantita riservata.
 - Per prodotti storici usare la disattivazione invece dell'eliminazione.
 
-Per rettifiche operative della giacenza usare preferibilmente il modulo Magazzino, in modo da conservare causale e tracciabilita.
+Per correggere una differenza di giacenza usare il workflow di inventario fisico. La rettifica diretta non e ammessa perche salterebbe conteggio, separazione dei ruoli e approvazione.
 
 ## Magazzino
 
@@ -149,6 +149,19 @@ Lo scarico non puo rendere negativa la disponibilita. La tabella movimenti puo e
 
 Il movimento `Reso cliente` viene generato dal workflow di ricezione reso. Non deve essere sostituito con un carico manuale, altrimenti si perde il collegamento operativo con il reso.
 
+### Eseguire un inventario fisico
+
+1. Aprire `Operazioni` e `Magazzino`, quindi `Nuovo inventario`.
+2. Inserire il motivo e scegliere esplicitamente i prodotti oppure l'intero catalogo.
+3. Per ogni riga registrare la quantita realmente contata e, quando utile, una nota su posizione o verifica svolta.
+4. Controllare teorico, riservato e differenza; quando tutte le righe sono complete usare `Invia per approvazione`.
+5. Un admin diverso dall'operatore che ha inviato il conteggio verifica le differenze, inserisce la motivazione e approva oppure annulla la sessione.
+6. Dopo l'approvazione verificare giacenza prima/dopo, movimenti compensati e collegamento al movimento magazzino.
+
+Vendite, carichi e scarichi possono continuare durante il conteggio. Il sistema conserva la differenza osservata e la applica alla giacenza disponibile al momento dell'approvazione, senza cancellare i movimenti intermedi. Se la rettifica ridurrebbe la giacenza sotto lo stock riservato, l'approvazione viene bloccata e la sessione resta da verificare.
+
+Non ripetere l'approvazione dopo un timeout con una nuova intenzione: il comando usa una chiave idempotente e il client mantiene lo stesso intento finche riceve un esito definitivo.
+
 ## Anagrafiche
 
 Il modulo contiene clienti e fornitori strutturati.
@@ -162,6 +175,28 @@ Il modulo contiene clienti e fornitori strutturati.
 5. Premere `Crea anagrafica` oppure `Salva modifiche`.
 
 La disattivazione conserva lo storico e impedisce l'uso operativo futuro. Evitare dati fiscali inventati: i documenti simulati copiano una fotografia dell'anagrafica disponibile al momento della generazione.
+
+## Ordini fornitore
+
+### Creare e inviare un ordine
+
+1. Verificare che il fornitore sia censito, attivo e di tipo `Fornitore`.
+2. Aprire `Operazioni` e `Ordini fornitore`.
+3. Selezionare il fornitore, indicare la data prevista e aggiungere una o piu righe prodotto con quantita e prezzo concordato.
+4. Salvare la bozza e verificarne totale, righe e date.
+5. Usare `Invia ordine` soltanto quando i dati sono confermati: dopo l'invio gli snapshot proteggono lo storico.
+
+### Registrare una ricezione merce
+
+1. Aprire il dettaglio di un ordine `Inviato` o `Parzialmente ricevuto`.
+2. Inserire per ogni riga la quantita effettivamente riscontrata, senza superare il residuo mostrato.
+3. Verificare il costo unitario effettivo proposto dal prezzo concordato e modificarlo soltanto usando il documento di consegna come evidenza.
+4. Scrivere una causale verificabile e confermare la ricezione.
+5. Controllare quantita, residuo, scostamento di costo, stato `Movimento registrato` e giacenza aggiornata prima di ripetere il comando.
+
+La conferma aggiorna ordine, giacenza fisica, ledger e costo nella stessa transazione. Ricezioni parziali successive aggiornano la media ponderata; un retry con la stessa chiave non duplica il carico. Le unita storiche prive di costo restano indicate come non valorizzate e non devono essere corrette inventando un costo o usando il prezzo di vendita.
+
+Se il residuo non deve piu arrivare, usare `Annulla residuo` e indicare una motivazione. Le quantita gia ricevute e lo storico restano conservati. Un ordine completamente ricevuto o annullato non accetta altre ricezioni.
 
 ## Ordini
 
@@ -228,23 +263,29 @@ Richiesto -> Approvato -> Ricevuto -> Parzialmente rimborsato -> Rimborsato
 ### Richiedere un reso
 
 1. Aprire le operazioni di un ordine evaso.
-2. Selezionare prodotto e quantita.
-3. Inserire una motivazione verificabile.
-4. Premere `Richiedi reso`.
+2. Verificare per ogni prodotto la quantita ordinata, quella gia restituita o impegnata e il residuo ancora restituibile.
+3. Inserire una quantita positiva su una o piu righe prodotto; lasciare a zero le righe escluse dalla richiesta.
+4. Inserire una motivazione verificabile riferita all'intera richiesta.
+5. Premere `Richiedi reso` una sola volta.
 
 Il cliente puo richiedere resi solo sui propri ordini.
+
+Il form viene svuotato soltanto quando il server conferma che il reso e stato salvato. Se compare un errore, oppure un avviso che richiede verifica, non reinserire subito i dati: aggiornare il dettaglio ordine e controllare lo stato della richiesta prima di ripetere il comando.
 
 ### Gestire un reso
 
 1. Verificare ordine, articoli e motivazione.
-2. Approvare oppure rifiutare aggiungendo una nota di revisione.
+2. Approvare oppure rifiutare aggiungendo una nota di revisione nel pannello dello specifico reso; la nota non viene condivisa con altri resi dello stesso ordine.
 3. Dopo l'effettivo rientro della merce, usare `Registra ricezione`.
 4. Verificare il movimento automatico di reintegro magazzino.
 5. Preparare e registrare il rimborso, anche parziale, senza superare il valore rimborsabile.
+6. Consultare nel reso il ledger rimborsi e verificare codice transazione, importo, riferimento, causale, operatore e data.
 
 Non registrare la ricezione prima del rientro fisico della merce. Il rimborso e consentito soltanto dopo la ricezione e non puo superare gli importi effettivamente incassati e rimborsabili.
 
 ## Documenti simulati
+
+Prima di creare un documento, il super admin deve completare ragione sociale, identificativo fiscale, indirizzo, CAP, citta, provincia, paese e fuso orario nella configurazione aziendale. Il fuso determina l'anno della numerazione e non puo essere cambiato dopo il primo documento.
 
 ### Fattura simulata
 
@@ -277,7 +318,9 @@ Per lo stesso ordine puo essere creata una sola nota credito simulata. La funzio
 
 1. Selezionare `Magazzino` nella pagina Report.
 2. Filtrare per testo, categoria, stock e stato prodotto.
-3. Verificare giacenza fisica, riservata, disponibile e valore stock.
+3. Verificare giacenza fisica, riservata, disponibile, valore potenziale di vendita, valore noto a costo e copertura.
+
+Il valore potenziale usa quantita fisica e prezzo di vendita scontato corrente. Il valore noto a costo usa soltanto le unita coperte da ricezioni valorizzate; il margine potenziale confronta tale quota con il prezzo corrente. Sono indicatori gestionali, non valori contabili, costo del venduto, utile o margine consuntivo.
 
 I report possono essere esportati in `CSV`, `Excel` e `PDF`. Il periodo vendite non puo superare cinque anni e ogni esportazione e limitata a 10.000 righe. Le esportazioni sono registrate nell'audit log.
 
@@ -298,11 +341,11 @@ Un admin puo creare dipendenti e clienti. Solo il super admin puo creare un altr
 
 ### Eliminazione account
 
-- Nessun utente puo eliminare il proprio account durante la sessione attiva.
+- Nessun utente puo disabilitare o modificare amministrativamente il proprio account durante la sessione attiva.
 - Un super admin e protetto dall'eliminazione tramite interfaccia.
 - Un admin non puo eliminare un altro admin.
-- Solo il super admin puo eliminare un account admin.
-- La password della sessione e richiesta anche per l'eliminazione.
+- Solo il super admin puo disabilitare, riabilitare, resettare o cambiare ruolo a un account admin.
+- La password della sessione e richiesta per le operazioni amministrative sensibili sugli account.
 
 Verificare sempre identita e ruolo prima di confermare l'operazione.
 

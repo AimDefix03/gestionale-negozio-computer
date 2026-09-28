@@ -17,6 +17,14 @@ public record ProductResponse(
         BigDecimal price,
         BigDecimal discount,
         BigDecimal discountedPrice,
-        boolean discontinued
+        BigDecimal lastPurchaseCost,
+        BigDecimal averagePurchaseCost,
+        int costedQuantity,
+        int uncostedQuantity,
+        BigDecimal costCoveragePercentage,
+        BigDecimal knownInventoryCost,
+        BigDecimal potentialGrossMarginOnCostedStock,
+        boolean discontinued,
+        ProductCapabilities capabilities
 ) {
 }

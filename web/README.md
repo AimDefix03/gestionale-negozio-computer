@@ -9,15 +9,9 @@ Prima base della migrazione del gestionale da applicazione Swing a web app moder
 
 ## Account iniziale
 
-Per lo sviluppo viene creato automaticamente un super admin iniziale se il database e vuoto e il bootstrap locale e abilitato:
+Nessun account viene creato automaticamente. Su database vuoto il backend richiede il bootstrap esplicito del primo super admin tramite variabili ambiente; valori locali noti vengono rifiutati in ogni profilo. Dopo il primo avvio il bootstrap deve essere nuovamente disabilitato.
 
-- username: `admin`
-- password: `Admin123!`
-- ruolo: `SUPER_ADMIN`
-
-Queste credenziali sono solo locali. In produzione sono bloccate dal backend.
-
-La registrazione pubblica consente solo `Dipendente` e `Cliente`. La creazione di altri account admin e prevista dal pannello `Account` ed e consentita solo al super admin.
+La registrazione pubblica crea esclusivamente account `CUSTOMER`. Dipendenti e amministratori vengono creati dal pannello `Account`; la creazione di amministratori e consentita solo al super admin.
 
 ## Avvio backend
 
@@ -30,23 +24,32 @@ docker compose up -d postgres
 Il database di sviluppo usa credenziali locali non produttive:
 
 - database: `gestionale`
-- username: `gestionale`
-- password: `gestionale_dev_password`
+- owner: `gestionale_owner` senza login
+- migrator: `gestionale_migrator`
+- runtime: `gestionale_runtime`
 
 Poi avviare il backend:
 
 ```bash
 cd web/backend
-mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
 ```
 
-Il profilo predefinito e `dev`. La configurazione puo essere sovrascritta con:
+Non esiste un profilo predefinito: lo sviluppo deve attivare `dev` esplicitamente. La configurazione puo essere sovrascritta con:
 
 ```bash
 GESTIONALE_DB_URL=jdbc:postgresql://localhost:5432/gestionale
-GESTIONALE_DB_USERNAME=gestionale
-GESTIONALE_DB_PASSWORD=gestionale_dev_password
+GESTIONALE_DB_OWNER_USERNAME=gestionale_owner
+GESTIONALE_DB_RUNTIME_USERNAME=gestionale_runtime
+GESTIONALE_DB_RUNTIME_PASSWORD=<password-runtime-locale>
+GESTIONALE_DB_MIGRATOR_USERNAME=gestionale_migrator
+GESTIONALE_DB_MIGRATOR_PASSWORD=<password-migrator-locale>
+GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED=true
+GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME=nome_super_admin_locale
+GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD=secret_forte_unico
 ```
+
+Non sono fornite credenziali predefinite. Il runtime applicativo non puo creare, alterare o eliminare oggetti database; Flyway usa il migrator separato e assume il ruolo owner `NOLOGIN` soltanto durante le migrazioni.
 
 Le migrazioni database sono gestite da Flyway in `web/backend/src/main/resources/db/migration`.
 

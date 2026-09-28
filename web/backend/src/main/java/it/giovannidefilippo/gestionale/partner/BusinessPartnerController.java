@@ -67,4 +67,29 @@ class BusinessPartnerController {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_PARTNERS);
         service.deactivate(code, actor.username(), actor.roleLabel());
     }
+
+    @PutMapping("/{code}/account-link")
+    BusinessPartnerResponse linkAccount(
+            @PathVariable String code,
+            @Valid @RequestBody BusinessPartnerAccountLinkRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token
+    ) {
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_ACCOUNTS);
+        if (!actor.hasPermission(UserPermission.MANAGE_PARTNERS)) {
+            throw new it.giovannidefilippo.gestionale.common.ForbiddenException("Servono i permessi di gestione anagrafiche.");
+        }
+        return service.linkCustomerAccount(code, request.accountId(), actor.username(), actor.roleLabel());
+    }
+
+    @DeleteMapping("/{code}/account-link")
+    BusinessPartnerResponse unlinkAccount(
+            @PathVariable String code,
+            @RequestHeader(value = "X-Session-Token", required = false) String token
+    ) {
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_ACCOUNTS);
+        if (!actor.hasPermission(UserPermission.MANAGE_PARTNERS)) {
+            throw new it.giovannidefilippo.gestionale.common.ForbiddenException("Servono i permessi di gestione anagrafiche.");
+        }
+        return service.unlinkCustomerAccount(code, actor.username(), actor.roleLabel());
+    }
 }

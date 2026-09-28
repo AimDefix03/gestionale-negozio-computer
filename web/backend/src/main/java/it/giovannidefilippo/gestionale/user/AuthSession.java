@@ -7,6 +7,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.Duration;
@@ -22,12 +25,19 @@ public class AuthSession {
     @Column(nullable = false, unique = true, length = 128)
     private String tokenHash;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "account_id", nullable = false)
+    private UserAccount account;
+
     @Column(nullable = false)
-    private String username;
+    private String usernameSnapshot;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
+
+    @Column(nullable = false)
+    private long credentialVersion;
 
     @Column(nullable = false)
     private Instant createdAt;
@@ -43,10 +53,12 @@ public class AuthSession {
     protected AuthSession() {
     }
 
-    AuthSession(String tokenHash, String username, UserRole role, Instant createdAt, Instant expiresAt) {
+    AuthSession(String tokenHash, UserAccount account, Instant createdAt, Instant expiresAt) {
         this.tokenHash = tokenHash;
-        this.username = username;
-        this.role = role;
+        this.account = account;
+        this.usernameSnapshot = account.getUsername();
+        this.role = account.getRole();
+        this.credentialVersion = account.getCredentialVersion();
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
         this.lastUsedAt = createdAt;
@@ -61,11 +73,23 @@ public class AuthSession {
     }
 
     public String getUsername() {
-        return username;
+        return usernameSnapshot;
+    }
+
+    public Long getAccountId() {
+        return account.getId();
+    }
+
+    UserAccount getAccount() {
+        return account;
     }
 
     public UserRole getRole() {
         return role;
+    }
+
+    public long getCredentialVersion() {
+        return credentialVersion;
     }
 
     public Instant getCreatedAt() {

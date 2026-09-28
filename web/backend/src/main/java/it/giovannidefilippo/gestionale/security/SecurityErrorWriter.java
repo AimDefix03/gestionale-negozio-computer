@@ -1,6 +1,6 @@
 package it.giovannidefilippo.gestionale.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import it.giovannidefilippo.gestionale.common.ApiErrorCode;
 import it.giovannidefilippo.gestionale.common.ApiError;
 import it.giovannidefilippo.gestionale.common.OperationalMetrics;

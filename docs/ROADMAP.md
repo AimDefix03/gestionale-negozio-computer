@@ -1,123 +1,108 @@
 # Roadmap
 
-Stato verificato il 2026-07-16.
+Stato verificato il 2026-09-05.
 
-## Fase 0 - Baseline
+## Fonte e stato reale
 
-- Audit repository: completato.
-- Test root Swing: 41 test passati.
-- Test backend web: 54 test passati.
-- Build frontend: completata.
-- Documentazione governance: completata nello Step 1.
+`MASTER_SOURCE_AGENTE_AI.md` definisce ordine, dipendenze, test, criteri di accettazione e stop condition. Questa roadmap ne espone la classificazione operativa senza sostituirlo.
 
-## Fase 1 - Stabilizzazione del prodotto
+La precedente roadmap documentava molte capacita gia implementate, ma non dimostrava la chiusura delle criticita emerse dal nuovo audit. Quelle implementazioni restano evidenze tecniche utili, non prove di prontezza produttiva.
 
-1. Governance documentale e decisioni architetturali.
-2. PostgreSQL locale con Docker Compose.
-3. Flyway per migrazioni versionate.
-4. Separazione profili `dev` e `test`.
-5. Rimozione di `ddl-auto: update` dalla base web.
-6. Consolidamento Git: rendere tracciata la parte `web/` e chiarire rapporto legacy/web.
+Stato corrente:
 
-## Fase 2 - Fondamenta applicative
+- prototipo avanzato senza P0 aperti;
+- maturita indicativa del 95-97% nel repository reale dopo lo Step 4.3;
+- 32 step completati, sincronizzati e verificati nel repository reale su 48 (66,7%);
+- gli step MVP approvati sono ammessi uno alla volta secondo `PRODUCT_SCOPE.md`;
+- i Gate A, B e C sono soddisfatti tecnicamente nel repository reale.
 
-7. Formato errori API stabile con codice errore applicativo: completato.
-8. Paginazione e filtri server-side per prodotti, ordini, audit e movimenti: completato lato API e collegato ai controlli frontend principali.
-9. Correlation ID e logging piu strutturato: completato per header, errori API, frontend e log richieste.
-10. Revisione DTO per rimuovere dati derivabili dal client, come actor e role nelle richieste operative: completato per magazzino, ordini e documenti.
-11. Test di autorizzazione per ogni modulo: completato per prodotti, magazzino, ordini, documenti, account e audit.
-12. Permessi granulari sulle transizioni ordine: completato con `CONFIRM_ORDERS`, `FULFILL_ORDERS` e `CANCEL_ORDERS`.
+## Classificazione del backlog
 
-## Fase 3 - Sicurezza professionale
+| Classe | Step | Scopo | Gate |
+|---|---|---|---|
+| Stabilizzazione | 0.3, 1.1-1.6, 2.1-2.9 | Fixture realistiche, chiusura P0, identita stabile, runner sicuri, framework aggiornato, migration correttive, invarianti di stock e denaro, PostgreSQL autorevole | Gate 0, A e B |
+| MVP | 3.0-3.10 | Workflow operativi coerenti, vendita assistita, viste cliente, lifecycle account, frontend affidabile, KPI corretti, accessibilita e gate E2E | Gate C |
+| Dopo MVP | 4.1-4.8, 5.1-5.6, 6.1-6.5 e Fase 7 | Funzioni commerciali estese, beta controllata, hardening produttivo, compliance, packaging, supportabilita e integrazioni | Gate D, E e F |
 
-13. Sessioni persistenti con token hashati e revoca logout: completato con migrazione `auth_sessions`.
-14. Account demo separati per profilo `dev`: completato con bootstrap super admin configurabile, disattivato di default in `prod` e bloccato se usa credenziali locali.
-15. Disabilitazione H2 console fuori da `dev`: completato nelle configurazioni web correnti.
-16. Audit piu dettagliato su operazioni critiche: completato con `requestId`, origine richiesta, tipo entita e riepiloghi di modifica prodotto.
-17. Valutazione CSRF/cookie o header token in base al deployment reale: completata con ADR 0004, token in memoria/header custom, rotazione al rinnovo, timeout assoluto e inattivita; cookie HttpOnly rinviato a una migrazione atomica con CSRF e TLS.
-18. Protezione brute force applicativa e infrastrutturale: completata con `login_attempts`, cleanup programmato, rate limiting Nginx per IP, backend prod-like su loopback e test automatico del contratto `429`.
-19. Idempotenza sulle operazioni critiche: completato per ordini, documenti simulati e movimenti magazzino tramite `Idempotency-Key`.
-20. Osservabilita applicativa di base: completata con endpoint protetto `/api/system/status`, metriche sessione/login, stato database, runtime, audit warning/critical ed errori API recenti.
+“Dopo MVP” non significa facoltativo per la produzione. Gli step 4.7, 4.8 e gli interventi della Fase 5 restano necessari prima di un rilascio reale anche quando risolvono finding P1.
 
-## Fase 4 - Dominio operativo
+## Stabilizzazione
 
-19. Catalogo con regole di eliminazione piu sicure.
-20. Magazzino con concorrenza, optimistic locking, stock riservato e movimenti obbligatori: completato per aggiornamenti stock, scarichi concorrenti, storico movimenti e disponibilita vendibile.
-21. Ordini con stati e transizioni controllate: completato con bozza, conferma, evasione, annullamento, audit, permessi separati, prenotazione stock su conferma e scarico fisico su evasione.
-22. Documenti simulati con workflow esplicito, disclaimer invariabile e snapshot anagrafica cliente: completato.
-23. Anagrafiche clienti e fornitori: completato con modello dati, API protette, permessi dedicati, pagina frontend e collegamento opzionale agli ordini.
+Durante questa classe sono accettati esclusivamente P0/P1, test e correzioni necessarie. Gli interventi P2 vengono eseguiti solo quando sono una dipendenza esplicita per fixture, PostgreSQL, integrita o gate.
 
-## Fase 5 - Frontend gestionale
+### Preparazione
 
-24. Scomposizione `App.tsx` in pagine, layout e componenti: completata per viste, shell workspace, navigazione, componenti condivisi e hook di interazione.
-25. Separazione client API per dominio con trasporto condiviso: completata per catalogo, anagrafiche, account, magazzino, ordini, documenti, audit, dashboard e monitoraggio.
-26. Navigazione stile workspace/tab piu coerente.
-27. Tabelle professionali con stati, filtri, paginazione, vuoto ed errori: completato per catalogo prodotti, ordini, movimenti e audit.
-28. Accessibilita base e focus management.
-29. Design system interno con componenti riutilizzabili.
-30. Layout fluido per notebook e tablet: completato rimuovendo la larghezza minima globale e introducendo breakpoint progressivi.
+- 0.1 Baseline nel repository reale: completato.
+- 0.2 Freeze di scope e nuove feature: completato.
+- 0.3 Fixture anonimizzate e dati di test realistici: completato.
 
-Test frontend automatici: completati con 32 casi Vitest/React Testing Library su componenti, trasporto HTTP e flussi API critici, oltre a tre smoke test Playwright sullo stack reale.
+### Chiusura P0
 
-## Fase 6 - Preparazione al rilascio
+- 1.1 Registrazione pubblica limitata a `CUSTOMER`: completato.
+- 1.2 Censimento account e revoca delle sessioni potenzialmente emesse: completato.
+- 1.3 Subject di sessione stabile: completato.
+- 1.4 Ownership degli ordini basata su ID: completato.
+- 1.5 Runner Docker isolati e non distruttivi: completato.
+- 1.6 Spring Security aggiornato e avvio fail-closed: completato.
 
-31. Docker Compose completo.
-32. README operativo aggiornato.
-33. Checklist release e configurazione ambiente: completato con `docs/CONFIGURATION.md`, `.env.example`, `docs/RELEASE_CHECKLIST.md` e `docs/CHANGELOG.md`.
-34. CI con test backend/frontend: completato con GitHub Actions, hygiene repository, build backend e build frontend.
-35. Dati seed controllati.
-36. Ambiente demo protetto.
+### Integrita dati e processi
 
-## Prossimo step tecnico raccomandato
+- 2.1 Migration correttive per V15 e V17: completato.
+- 2.2 Identita e codici business canonici: completato.
+- 2.3 Ledger magazzino autorevole: completato.
+- 2.4 Idempotenza atomica e concorrente: completato.
+- 2.5 Separazione tra esito comando e refresh frontend: completato.
+- 2.6 Annullamento ordine con reversal: completato.
+- 2.7 Riconciliazione finanziaria: completato.
+- 2.8 Ruoli PostgreSQL least privilege e porta chiusa: completato.
+- 2.9 Suite PostgreSQL obbligatoria: completato.
 
-Step completato: CI con GitHub Actions. Sono stati aggiunti controlli automatici per hygiene repository, backend Spring Boot, frontend React e quality gate.
+## MVP
 
-Step completato: scansioni di sicurezza automatiche. Sono stati aggiunti security workflow, Dependabot, audit npm, dependency review, inventory Maven e CodeQL.
+- 3.0 Benchmark dei workflow reali: completato; template e prima scheda in `WORKFLOW_BENCHMARKS.md`.
+- 3.1 Vendita assistita da personale: completato tecnicamente; test automatici verdi, prova operatore reale ancora da eseguire.
+- 3.2 Projection e dashboard separate per cliente: completato.
+- 3.3 Lifecycle account completo: completato.
+- 3.4 Query state e sessione frontend centralizzati: completato.
+- 3.5 Decomposizione di `App.tsx` per vertical slice: completato.
+- 3.6 Capability e aggregazioni server-side: completato.
+- 3.7 KPI, timezone e configurazione azienda corretti: completato.
+- 3.8 Resi multi-riga e feedback operativo: completato e sincronizzato.
+- 3.9 Accessibilita e preservazione delle bozze: completato, sincronizzato e verificato nel repository reale.
+- 3.10 Gate E2E dell'MVP: completato, sincronizzato e verificato nel repository reale.
 
-Step completato: Docker prod-like. Sono stati aggiunti Dockerfile backend/frontend, Nginx proxy, compose completo con PostgreSQL reale e controllo CI dello stack.
+Il Gate C richiede workflow core completi, autorizzazioni coerenti, dati corretti e test E2E ripetibili. Lo Step 3.10 soddisfa tecnicamente questi criteri su PostgreSQL e browser reali. La prova guidata con operatore resta `PENDING_OPERATOR_EXECUTION` e il Gate C non equivale ancora a produzione.
 
-Step completato: backup/restore PostgreSQL. Sono stati aggiunti backup atomici, checksum obbligatori, lock, retention, controllo freschezza, verifica automatica su database temporaneo e restore drill dell'ultimo backup reale.
+## Dopo MVP
 
-Step completato: osservabilita amministrativa. Sono stati aggiunti endpoint e schermata Monitoraggio per stato sistema, database, sessioni, audit sensibile ed errori API recenti.
+### Beta controllata
 
-Step completato: test frontend automatici. La suite copre 32 casi su autenticazione, registrazione, sessione, catalogo, ordini, pagamenti, resi, configurazione aziendale, report, dashboard ed errori API ed e eseguita dalla CI.
+- 4.1 Ordini fornitore: completato, sincronizzato e verificato nel repository reale; prova operatore ancora pendente.
+- 4.2 Ricezione fisica e costo: completato, sincronizzato e verificato nel repository reale.
+- 4.3 Inventario fisico e rettifiche approvate: completato, sincronizzato e verificato nel repository reale.
+- 4.4-4.6 Riordino, import e performance.
+- 4.7 Backup off-site e restore parallelo.
+- 4.8 Restart, consegna alert e log centralizzati.
 
-Step completato: smoke test browser end-to-end. Playwright verifica login negativo, autenticazione super admin, navigazione, creazione prodotto, registrazione cliente, carrello e conferma ordine contro PostgreSQL, Spring Boot e Nginx reali.
+### Produzione per scope definito
 
-Step completato: modello pagamenti strutturato. Ogni ordine persiste metodo controllato, stato, importi, valuta e timestamp in `order_payments`; il checkout permette di scegliere il metodo e la vista ordini distingue stato ordine e stato pagamento.
+- 5.1 Supply-chain security.
+- 5.2 Artifact immutabile, promozione e rollback.
+- 5.3 Security hardening e penetration test.
+- 5.4 Test di carico, concorrenza, failure e disaster recovery.
+- 5.5 Privacy e retention.
+- 5.6 Decisione vincolante sul perimetro pagamenti.
 
-Step completato: hardening architetturale. La build root e ora web-first, Swing usa un POM legacy dedicato, Spring Modulith verifica gli otto moduli business e la precedente dipendenza ciclica tra catalogo e ordini e stata rimossa tramite una porta applicativa.
+### Commercializzazione supportabile
 
-Step completato: pagamenti e resi operativi. Incassi e rimborsi producono un ledger immutabile, i saldi supportano pagamenti parziali e il reso segue un workflow autorizzato con reintegro di magazzino, audit e idempotenza.
+- 6.1 Packaging, onboarding e configurazione guidata.
+- 6.2 Supportabilita e policy di upgrade.
+- 6.3 Permessi granulari e approvazioni.
+- 6.4 Documenti fiscali tramite provider e consulenza professionale.
+- 6.5 Integrazioni e funzioni vendibili.
 
-Step completato: configurazione aziendale e numerazioni documentali. Il super admin gestisce identita, contatti, aliquota IVA predefinita e formato dei progressivi; i documenti usano contatori atomici per tipo/esercizio e conservano snapshot storici dell'emittente e dell'aliquota.
+La Fase 7 contiene soltanto evoluzioni future guidate da domanda commerciale. Multi-magazzino, multi-azienda e multi-tenant non entrano nel prodotto senza un nuovo threat model e un nuovo scope approvato.
 
-Step completato: report vendite e magazzino. I dataset sono filtrati lato server, protetti da permesso e limite righe, consultabili nel frontend ed esportabili in CSV, Excel e PDF con audit dedicato.
+## Regola di avanzamento
 
-Step completato: manuale utente operativo. Sono documentati accesso, navigazione, permessi, catalogo, magazzino, anagrafiche, ordini, pagamenti, resi, documenti simulati, report, amministrazione, monitoraggio, gestione errori e procedure distinte per ruolo.
-
-Step completato: rate limiting e protezione login infrastrutturale. Nginx limita il login per IP, restituisce un errore `429` coerente e tracciabile, registra i rifiuti e viene verificato nello smoke test prod-like; il lockout persistente backend resta il secondo livello di difesa.
-
-Step completato: hardening token e sessioni. Il rinnovo ruota atomicamente il token e revoca quello precedente; sessioni assolute e inattive scadono in modo configurabile, login/rinnovo non sono memorizzabili in cache e l'ADR 0004 documenta la scelta header token/CSRF.
-
-Step completato: Content Security Policy e hardening frontend. Nginx applica una policy same-origin senza `unsafe-inline` o `unsafe-eval`, blocca framing e plugin, uniforma gli header browser e differenzia la cache; verifiche HTTP e Chromium sono integrate nella CI.
-
-Step completato: Actuator limitato in produzione. Il management plane usa una porta interna separata, espone soltanto health senza dettagli, distingue liveness e readiness e viene verificato contro esposizioni accidentali sulla porta API.
-
-Step completato: gestione dei segreti. Il runtime accetta valori protetti o file secret in modo fail-closed, lo stack E2E usa mount read-only, la CI verifica l'assenza di valori nei container e Gitleaks controlla la storia Git; rotazione e rollback sono documentati.
-
-Step completato: hardening container non-root. Le immagini usano utenti espliciti, Nginx ascolta su porta non privilegiata e Compose impone root filesystem read-only, `no-new-privileges`, capability eliminate e percorsi scrivibili confinati. La verifica runtime prod-like e integrata nello smoke E2E e nella CI.
-
-Step completato: backup PostgreSQL schedulati e restore testato. Timer systemd persistenti eseguono il backup giornaliero e il drill settimanale isolato; CI e script locali verificano lifecycle, scheduling e restore sintetico. Replica off-site, cifratura e immutabilita restano responsabilita dell'infrastruttura reale.
-
-Step completato: osservabilita prod-like. Il backend produce log JSON correlati, espone metriche Prometheus sul management plane interno e registra contatori a cardinalita limitata per autenticazione, sessioni ed errori API. Prometheus usa retention configurabile, cinque regole di alert e un container non-root con filesystem read-only. Verifiche statiche e runtime sono integrate nella CI.
-
-Step completato: verifica prod-like ricorrente. Un runner unico costruisce le immagini con aggiornamento delle basi, verifica Flyway su PostgreSQL reale, sicurezza, osservabilita, smoke test browser e recovery, acquisisce sempre la diagnostica e certifica il cleanup Docker. La CI lo esegue su push, pull request, manualmente e ogni settimana.
-
-Step completato: proposta architetturale multi-azienda e multi-tenant. ADR 0005 definisce schema condiviso con isolamento multilivello e opzione database dedicato; il documento operativo separa tenant, azienda legale, sede e magazzino e specifica migrazione, test e rollback. Nessuna funzionalita multi-tenant e ancora dichiarata attiva.
-
-Step completato: proposta separata per GDPR, conservazione documentale e fatturazione elettronica. ADR 0006 mantiene distinti privacy, retention, backup, conservazione e trasmissione SdI; il documento operativo definisce ruoli, dati, workflow, provider, migrazione e gate senza dichiarare conformita.
-
-Step completato: proposta per onboarding clienti, branding, provisioning, aggiornamenti e migrazioni. ADR 0007 definisce lifecycle cliente, control plane, branding sicuro, installazioni pooled/dedicate e flotta di release; il documento operativo specifica workflow, sicurezza, rollout, rollback e gate senza dichiarare funzionalita gia disponibili.
-
-La roadmap architetturale richiesta e completa: 35/35. Questo non equivale a dichiarare il prodotto SaaS, conforme o pronto alla vendita. L'eventuale programma successivo non e un nuovo requisito documentale: parte dalla Fase A di `CUSTOMER_LIFECYCLE_AND_RELEASE_ARCHITECTURE.md`, dopo approvazione del modello commerciale e della piattaforma operativa.
+Ogni step viene eseguito singolarmente, nel suo ordine, dopo autorizzazione. Non si avanza se test, criteri di accettazione, dipendenze o stop condition non sono soddisfatti. Lo stato puntuale e registrato in `IMPLEMENTATION_PROGRESS.md`.

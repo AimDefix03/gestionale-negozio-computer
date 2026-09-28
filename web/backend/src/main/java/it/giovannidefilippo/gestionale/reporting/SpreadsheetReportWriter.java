@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Component
@@ -80,14 +80,19 @@ class SpreadsheetReportWriter {
                     new Metric("Unita fisiche", report.physicalUnits()),
                     new Metric("Riservate", report.reservedUnits()),
                     new Metric("Disponibili", report.availableUnits()),
-                    new Metric("Valore magazzino", report.inventoryValue()),
+                    new Metric("Valore potenziale a prezzo vendita", report.potentialRetailStockValue()),
+                    new Metric("Valore noto a costo", report.knownInventoryCostValue()),
+                    new Metric("Margine potenziale valorizzato", report.potentialGrossMarginOnCostedStock()),
+                    new Metric("Unita valorizzate", report.costedUnits()),
+                    new Metric("Unita senza costo", report.uncostedUnits()),
+                    new Metric("Copertura costo %", report.costCoveragePercentage()),
                     new Metric("Scorte basse", report.lowStockCount()),
                     new Metric("Esauriti", report.outOfStockCount()),
                     new Metric("Disattivati", report.discontinuedCount())
             ));
             rowIndex += 2;
             Row header = sheet.createRow(rowIndex++);
-            writeHeader(header, styles, "Codice", "Nome", "Categoria", "Brand", "Tipo", "Fisico", "Riservato", "Disponibile", "Prezzo", "Sconto %", "Prezzo netto", "Valore stock", "Stato stock", "Stato prodotto");
+            writeHeader(header, styles, "Codice", "Nome", "Categoria", "Brand", "Tipo", "Fisico", "Riservato", "Disponibile", "Prezzo", "Sconto %", "Prezzo netto", "Valore potenziale vendita", "Ultimo costo", "Costo medio", "Valorizzate", "Senza costo", "Copertura costo %", "Valore noto a costo", "Margine potenziale", "Stato stock", "Stato prodotto");
             int tableStart = rowIndex - 1;
             for (InventoryReportResponse.InventoryProductRow product : report.products()) {
                 Row row = sheet.createRow(rowIndex++);
@@ -102,13 +107,20 @@ class SpreadsheetReportWriter {
                 number(row, 8, product.price(), styles.currency());
                 number(row, 9, product.discount(), styles.percentage());
                 number(row, 10, product.discountedPrice(), styles.currency());
-                number(row, 11, product.stockValue(), styles.currency());
-                text(row, 12, product.stockStatusLabel(), styles.text());
-                text(row, 13, product.discontinued() ? "Disattivato" : "Attivo", styles.text());
+                number(row, 11, product.potentialRetailValue(), styles.currency());
+                optionalNumber(row, 12, product.lastPurchaseCost(), styles.currency(), styles.text());
+                optionalNumber(row, 13, product.averagePurchaseCost(), styles.currency(), styles.text());
+                integer(row, 14, product.costedQuantity(), styles.integer());
+                integer(row, 15, product.uncostedQuantity(), styles.integer());
+                number(row, 16, product.costCoveragePercentage(), styles.percentage());
+                number(row, 17, product.knownInventoryCost(), styles.currency());
+                number(row, 18, product.potentialGrossMarginOnCostedStock(), styles.currency());
+                text(row, 19, product.stockStatusLabel(), styles.text());
+                text(row, 20, product.discontinued() ? "Disattivato" : "Attivo", styles.text());
             }
-            sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(tableStart, Math.max(tableStart, rowIndex - 1), 0, 13));
+            sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(tableStart, Math.max(tableStart, rowIndex - 1), 0, 20));
             sheet.createFreezePane(0, tableStart + 1);
-            finish(sheet, 14);
+            finish(sheet, 21);
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException exception) {
@@ -165,9 +177,17 @@ class SpreadsheetReportWriter {
         cell.setCellStyle(style);
     }
 
-    private static void dateTime(Row row, int column, LocalDateTime value, CellStyle style) {
+    private static void optionalNumber(Row row, int column, BigDecimal value, CellStyle numberStyle, CellStyle textStyle) {
+        if (value == null) {
+            text(row, column, "-", textStyle);
+        } else {
+            number(row, column, value, numberStyle);
+        }
+    }
+
+    private static void dateTime(Row row, int column, OffsetDateTime value, CellStyle style) {
         Cell cell = row.createCell(column);
-        cell.setCellValue(value);
+        cell.setCellValue(value.toLocalDateTime());
         cell.setCellStyle(style);
     }
 

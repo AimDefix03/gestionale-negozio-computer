@@ -12,4 +12,8 @@ interface AuditEventRepository extends JpaRepository<AuditEvent, Long>, JpaSpeci
     List<AuditEvent> findBySeverityIn(Collection<AuditSeverity> severities, Pageable pageable);
 
     long countBySeverityAndTimestampAfter(AuditSeverity severity, LocalDateTime timestamp);
+
+    long countByActorIgnoreCaseAndCategory(String actor, AuditCategory category);
+
+    long countByActorIgnoreCaseAndEntityType(String actor, String entityType);
 }

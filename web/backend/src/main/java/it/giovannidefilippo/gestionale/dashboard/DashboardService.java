@@ -4,6 +4,7 @@ import it.giovannidefilippo.gestionale.inventory.InventoryService;
 import it.giovannidefilippo.gestionale.product.ProductDashboardSummary;
 import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.order.OrderService;
+import it.giovannidefilippo.gestionale.order.CustomerOrderDashboardSummary;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserPermission;
 import org.springframework.stereotype.Service;
@@ -31,13 +32,29 @@ public class DashboardService {
         ProductDashboardSummary products = productService.dashboardSummary(LOW_STOCK_THRESHOLD);
         return new DashboardResponse(
                 products.products(),
-                products.inventoryValue(),
+                products.potentialRetailStockValue(),
+                products.knownInventoryCostValue(),
+                products.potentialGrossMarginOnCostedStock(),
+                products.costedUnits(),
+                products.uncostedUnits(),
+                products.costCoveragePercentage(),
                 products.lowStock(),
                 products.outOfStock(),
-                orderService.countForDashboard(actor),
-                orderService.revenueForDashboard(actor),
+                orderService.dashboardSummary(),
                 orderService.recentForDashboard(actor, RECENT_ITEMS_LIMIT),
                 actor.hasPermission(UserPermission.MANAGE_INVENTORY) ? inventoryService.recentMovements(RECENT_ITEMS_LIMIT) : List.of()
+        );
+    }
+
+    public CustomerDashboardResponse customerSummary(AuthenticatedUser actor) {
+        CustomerOrderDashboardSummary orders = orderService.customerDashboardSummary(actor, RECENT_ITEMS_LIMIT);
+        return new CustomerDashboardResponse(
+                orders.totalOrders(),
+                orders.draftOrders(),
+                orders.confirmedOrders(),
+                orders.fulfilledOrders(),
+                orders.canceledOrders(),
+                orders.recentOrders()
         );
     }
 }

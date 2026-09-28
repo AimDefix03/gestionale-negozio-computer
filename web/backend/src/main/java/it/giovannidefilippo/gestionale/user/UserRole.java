@@ -11,7 +11,10 @@ public enum UserRole {
             UserPermission.MANAGE_PARTNERS,
             UserPermission.MANAGE_PRODUCTS,
             UserPermission.MANAGE_INVENTORY,
+            UserPermission.APPROVE_INVENTORY_COUNTS,
             UserPermission.VIEW_ORDERS,
+            UserPermission.VIEW_PURCHASE_ORDERS,
+            UserPermission.MANAGE_PURCHASE_ORDERS,
             UserPermission.CREATE_ORDERS,
             UserPermission.CONFIRM_ORDERS,
             UserPermission.FULFILL_ORDERS,
@@ -32,6 +35,8 @@ public enum UserRole {
             UserPermission.MANAGE_PRODUCTS,
             UserPermission.MANAGE_INVENTORY,
             UserPermission.VIEW_ORDERS,
+            UserPermission.VIEW_PURCHASE_ORDERS,
+            UserPermission.MANAGE_PURCHASE_ORDERS,
             UserPermission.CREATE_ORDERS,
             UserPermission.CONFIRM_ORDERS,
             UserPermission.FULFILL_ORDERS,
@@ -75,6 +80,7 @@ public enum UserRole {
     public boolean canManageOperations() {
         return hasPermission(UserPermission.MANAGE_PRODUCTS)
                 || hasPermission(UserPermission.MANAGE_INVENTORY)
+                || hasPermission(UserPermission.MANAGE_PURCHASE_ORDERS)
                 || hasPermission(UserPermission.MANAGE_DOCUMENTS);
     }
 

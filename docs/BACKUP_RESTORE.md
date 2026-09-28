@@ -28,8 +28,11 @@ Creare `/etc/gestionale/backup.env` o un file equivalente non tracciato:
 
 ```dotenv
 POSTGRES_DB=gestionale
-GESTIONALE_DB_USERNAME=gestionale_app
-GESTIONALE_DB_PASSWORD_SECRET_FILE=/etc/gestionale/secrets/database-password
+GESTIONALE_DB_BACKUP_USERNAME=gestionale_backup
+GESTIONALE_DB_BACKUP_PASSWORD_FILE=/etc/gestionale/secrets/database-backup-password
+GESTIONALE_DB_RESTORE_USERNAME=gestionale_restore
+GESTIONALE_DB_RESTORE_PASSWORD_FILE=/etc/gestionale/secrets/database-restore-password
+GESTIONALE_DB_OWNER_USERNAME=gestionale_owner
 BACKUP_DIR=/var/backups/gestionale
 BACKUP_RETENTION_DAYS=14
 BACKUP_RETENTION_COUNT=30
@@ -37,7 +40,7 @@ BACKUP_MAX_AGE_HOURS=26
 RESTORE_DRILL_MAX_SECONDS=900
 ```
 
-La password deve arrivare da un solo canale tra valore diretto, file oppure file secret. In produzione e raccomandato il file secret.
+Ogni password deve arrivare da un solo canale tra valore diretto e file. In produzione e raccomandato un file read-only materializzato dal secret manager. Il processo di backup riceve solo l'identita `backup`; il processo di restore riceve solo l'identita `restore` e il nome del ruolo owner. Le credenziali runtime e migrator non sono necessarie.
 
 ## Creazione manuale
 
@@ -80,7 +83,7 @@ ENV_FILE=/etc/gestionale/backup.env \
 scripts/db/restore.sh /var/backups/gestionale/nome-backup.dump
 ```
 
-Prima di eliminare il database lo script verifica checksum e struttura dell'archivio. Per il restore operativo:
+Prima di eliminare il database lo script verifica checksum e struttura dell'archivio. Il restore usa il ruolo dedicato, ripristina gli oggetti con ownership `owner` e riapplica i grant minimi. Il backend runtime non possiede privilegi per ricreare il database. Per il restore operativo:
 
 1. dichiarare una finestra di manutenzione;
 2. verificare identita di database, host e archivio;
@@ -114,6 +117,14 @@ ENV_FILE=/etc/gestionale/backup.env scripts/db/restore-drill-latest.sh
 ```
 
 Il drill reale non modifica il database operativo. Verifica le tabelle critiche e l'allineamento alla versione Flyway piu recente disponibile nel codice.
+
+La separazione dei ruoli e verificabile in isolamento con:
+
+```bash
+scripts/db/verify-database-least-privilege.sh
+```
+
+Il controllo prova anche che il runtime non possa eseguire DDL, che il backup non possa scrivere e che solo il ruolo restore possa creare il database di prova.
 
 ## Scheduling systemd
 

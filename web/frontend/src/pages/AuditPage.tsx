@@ -16,6 +16,7 @@ export default function AuditPage({ page, query, pageSize, onQueryChange }: Prop
   return (
     <DataList
       title="Audit log"
+      columns={['Severita', 'Entita', 'Azione', 'Operatore', 'Destinatario', 'Dettagli', 'Data']}
       rows={page.content.map((event) => [event.severity, event.entityType, event.action, event.actor, event.target, `${event.details} · ${event.source} · ${event.requestId}`, dateTime.format(new Date(event.timestamp))])}
       footer={<PaginationControls page={page} onPageChange={(nextPage) => onQueryChange({ ...query, page: nextPage })} />}
     >

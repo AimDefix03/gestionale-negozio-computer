@@ -4,7 +4,12 @@ import java.math.BigDecimal;
 
 public record ProductDashboardSummary(
         long products,
-        BigDecimal inventoryValue,
+        BigDecimal potentialRetailStockValue,
+        BigDecimal knownInventoryCostValue,
+        BigDecimal potentialGrossMarginOnCostedStock,
+        long costedUnits,
+        long uncostedUnits,
+        BigDecimal costCoveragePercentage,
         long lowStock,
         long outOfStock
 ) {

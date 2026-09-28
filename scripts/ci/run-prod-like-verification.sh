@@ -5,38 +5,80 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 COMPOSE_FILE="$ROOT_DIR/docker-compose.prod-like.yml"
 SECRETS_COMPOSE_FILE="$ROOT_DIR/docker-compose.secrets.yml"
 BOOTSTRAP_SECRET_COMPOSE_FILE="$ROOT_DIR/docker-compose.bootstrap-secret.yml"
-RAW_RUN_ID=${PRODLIKE_RUN_ID:-${GITHUB_RUN_ID:-$$}-${GITHUB_RUN_ATTEMPT:-1}}
+RUN_LABELS_COMPOSE_FILE="$ROOT_DIR/docker-compose.run-labels.yml"
+PROJECT_PREFIX=gestionale-prodlike-
+
+. "$ROOT_DIR/scripts/ci/docker-run-safety.sh"
+
+for command in docker openssl curl npm; do
+  command -v "$command" >/dev/null 2>&1 || {
+    printf 'Comando richiesto non disponibile: %s\n' "$command" >&2
+    exit 1
+  }
+done
+
+RANDOM_SUFFIX=$(openssl rand -hex 8)
+RAW_RUN_ID=${PRODLIKE_RUN_ID:-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-$RANDOM_SUFFIX}
 RUN_ID=$(printf '%s' "$RAW_RUN_ID" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9_.-' '-')
 RUN_ID=${RUN_ID#-}
 RUN_ID=${RUN_ID%-}
-
-if [ -z "$RUN_ID" ]; then
-  RUN_ID=$$
-fi
-
-PROJECT_NAME=${PRODLIKE_PROJECT_NAME:-gestionale-recurring-$RUN_ID}
+PROJECT_NAME=${PRODLIKE_PROJECT_NAME:-$PROJECT_PREFIX$RANDOM_SUFFIX}
 DIAGNOSTICS_DIR=${PRODLIKE_DIAGNOSTICS_DIR:-${TMPDIR:-/tmp}/gestionale-prodlike-diagnostics-$RUN_ID}
 SECRET_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gestionale-prodlike-secrets.XXXXXX")
-DATABASE_PASSWORD=$(openssl rand -hex 32)
+DATABASE_BOOTSTRAP_PASSWORD=$(openssl rand -hex 32)
+DATABASE_MIGRATOR_PASSWORD=$(openssl rand -hex 32)
+DATABASE_RUNTIME_PASSWORD=$(openssl rand -hex 32)
+DATABASE_BACKUP_PASSWORD=$(openssl rand -hex 32)
+DATABASE_RESTORE_PASSWORD=$(openssl rand -hex 32)
 BOOTSTRAP_PASSWORD="Aa1!$(openssl rand -hex 30)"
+PROJECT_CLAIMED=0
+
+docker_run_validate_project_name "$PROJECT_NAME" "$PROJECT_PREFIX"
+docker_run_validate_id "$RUN_ID"
 
 mkdir -p "$DIAGNOSTICS_DIR"
 chmod 0700 "$SECRET_DIR"
-printf '%s' "$DATABASE_PASSWORD" >"$SECRET_DIR/database-password"
+printf '%s' "$DATABASE_BOOTSTRAP_PASSWORD" >"$SECRET_DIR/database-bootstrap-password"
+printf '%s' "$DATABASE_MIGRATOR_PASSWORD" >"$SECRET_DIR/database-migrator-password"
+printf '%s' "$DATABASE_RUNTIME_PASSWORD" >"$SECRET_DIR/database-runtime-password"
+printf '%s' "$DATABASE_BACKUP_PASSWORD" >"$SECRET_DIR/database-backup-password"
+printf '%s' "$DATABASE_RESTORE_PASSWORD" >"$SECRET_DIR/database-restore-password"
 printf '%s' "$BOOTSTRAP_PASSWORD" >"$SECRET_DIR/bootstrap-password"
-chmod 0444 "$SECRET_DIR/database-password" "$SECRET_DIR/bootstrap-password"
+chmod 0444 "$SECRET_DIR"/*
 
 if [ -n "${GITHUB_ACTIONS:-}" ]; then
-  printf '::add-mask::%s\n' "$DATABASE_PASSWORD"
+  printf '::add-mask::%s\n' "$DATABASE_BOOTSTRAP_PASSWORD"
+  printf '::add-mask::%s\n' "$DATABASE_MIGRATOR_PASSWORD"
+  printf '::add-mask::%s\n' "$DATABASE_RUNTIME_PASSWORD"
+  printf '::add-mask::%s\n' "$DATABASE_BACKUP_PASSWORD"
+  printf '::add-mask::%s\n' "$DATABASE_RESTORE_PASSWORD"
   printf '::add-mask::%s\n' "$BOOTSTRAP_PASSWORD"
 fi
 
 export COMPOSE_PROJECT_NAME=$PROJECT_NAME
+export GESTIONALE_RUN_ID=$RUN_ID
 export POSTGRES_DB=gestionale_recurring
-export GESTIONALE_DB_USERNAME=gestionale_recurring
-export GESTIONALE_DB_PASSWORD=
-export GESTIONALE_DB_PASSWORD_FILE=
-export GESTIONALE_DB_PASSWORD_SECRET_FILE="$SECRET_DIR/database-password"
+export GESTIONALE_DB_BOOTSTRAP_USERNAME=gestionale_recurring_bootstrap
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD=
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD_FILE=
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD_SECRET_FILE="$SECRET_DIR/database-bootstrap-password"
+export GESTIONALE_DB_OWNER_USERNAME=gestionale_recurring_owner
+export GESTIONALE_DB_MIGRATOR_USERNAME=gestionale_recurring_migrator
+export GESTIONALE_DB_MIGRATOR_PASSWORD=
+export GESTIONALE_DB_MIGRATOR_PASSWORD_FILE=
+export GESTIONALE_DB_MIGRATOR_PASSWORD_SECRET_FILE="$SECRET_DIR/database-migrator-password"
+export GESTIONALE_DB_RUNTIME_USERNAME=gestionale_recurring_runtime
+export GESTIONALE_DB_RUNTIME_PASSWORD=
+export GESTIONALE_DB_RUNTIME_PASSWORD_FILE=
+export GESTIONALE_DB_RUNTIME_PASSWORD_SECRET_FILE="$SECRET_DIR/database-runtime-password"
+export GESTIONALE_DB_BACKUP_USERNAME=gestionale_recurring_backup
+export GESTIONALE_DB_BACKUP_PASSWORD=
+export GESTIONALE_DB_BACKUP_PASSWORD_FILE=
+export GESTIONALE_DB_BACKUP_PASSWORD_SECRET_FILE="$SECRET_DIR/database-backup-password"
+export GESTIONALE_DB_RESTORE_USERNAME=gestionale_recurring_restore
+export GESTIONALE_DB_RESTORE_PASSWORD=
+export GESTIONALE_DB_RESTORE_PASSWORD_FILE=
+export GESTIONALE_DB_RESTORE_PASSWORD_SECRET_FILE="$SECRET_DIR/database-restore-password"
 export GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED=true
 export GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME=recurring_super_admin
 export GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD=
@@ -63,6 +105,7 @@ compose() {
     -f "$COMPOSE_FILE" \
     -f "$SECRETS_COMPOSE_FILE" \
     -f "$BOOTSTRAP_SECRET_COMPOSE_FILE" \
+    -f "$RUN_LABELS_COMPOSE_FILE" \
     --profile observability \
     "$@"
 }
@@ -76,8 +119,16 @@ capture_diagnostics() {
     printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || printf unavailable)"
     printf 'compose_version=%s\n' "$(docker compose version --short 2>/dev/null || printf unavailable)"
   } >"$DIAGNOSTICS_DIR/metadata.txt"
-  compose ps -a >"$DIAGNOSTICS_DIR/compose-ps.txt" 2>&1 || true
-  compose logs --no-color >"$DIAGNOSTICS_DIR/compose.log" 2>&1 || true
+
+  if [ "$PROJECT_CLAIMED" -eq 1 ]; then
+    compose ps -a >"$DIAGNOSTICS_DIR/compose-ps.txt" 2>&1 || true
+    compose logs --no-color >"$DIAGNOSTICS_DIR/compose.log" 2>&1 || true
+    docker_run_inventory "$PROJECT_NAME" "$RUN_ID" "$DIAGNOSTICS_DIR/resources.txt" || true
+  else
+    printf 'Diagnostica stack omessa: il progetto non e stato acquisito dal runner.\n' \
+      >"$DIAGNOSTICS_DIR/compose-ps.txt"
+  fi
+
   docker image inspect \
     gestionale-postgres:prod-like \
     gestionale-api:prod-like \
@@ -94,21 +145,43 @@ capture_diagnostics() {
 }
 
 cleanup() {
-  STATUS=$?
-  CLEANUP_STATUS=0
-  trap - EXIT INT TERM
+  status=$?
+  cleanup_status=0
+  trap - EXIT HUP INT TERM
   capture_diagnostics
-  compose down -v --remove-orphans >"$DIAGNOSTICS_DIR/cleanup.log" 2>&1 || CLEANUP_STATUS=$?
-  rm -rf "$SECRET_DIR"
-  sh "$ROOT_DIR/scripts/ci/verify-prod-like-cleanup.sh" "$PROJECT_NAME" >>"$DIAGNOSTICS_DIR/cleanup.log" 2>&1 || CLEANUP_STATUS=$?
 
-  if [ "$STATUS" -eq 0 ] && [ "$CLEANUP_STATUS" -ne 0 ]; then
-    STATUS=$CLEANUP_STATUS
+  if [ "$PROJECT_CLAIMED" -eq 1 ]; then
+    docker_run_cleanup \
+      "$PROJECT_NAME" \
+      "$RUN_ID" \
+      "$DIAGNOSTICS_DIR/resources-before-cleanup.txt" \
+      >"$DIAGNOSTICS_DIR/cleanup.log" 2>&1 || cleanup_status=$?
+    sh "$ROOT_DIR/scripts/ci/verify-prod-like-cleanup.sh" \
+      "$PROJECT_NAME" \
+      "$RUN_ID" \
+      >>"$DIAGNOSTICS_DIR/cleanup.log" 2>&1 || cleanup_status=$?
+  else
+    printf 'Cleanup Docker non necessario: progetto non acquisito.\n' \
+      >"$DIAGNOSTICS_DIR/cleanup.log"
   fi
-  exit "$STATUS"
+
+  rm -f "$SECRET_DIR"/*
+  rmdir "$SECRET_DIR" 2>/dev/null || cleanup_status=1
+
+  if [ "$status" -eq 0 ] && [ "$cleanup_status" -ne 0 ]; then
+    status=$cleanup_status
+  fi
+  exit "$status"
 }
 
-trap cleanup EXIT INT TERM
+handle_signal() {
+  exit $((128 + $1))
+}
+
+trap cleanup EXIT
+trap 'handle_signal 1' HUP
+trap 'handle_signal 2' INT
+trap 'handle_signal 15' TERM
 
 SEEN_PORTS=" "
 for PORT in \
@@ -134,14 +207,8 @@ do
   SEEN_PORTS="$SEEN_PORTS$PORT "
 done
 
-for command in docker openssl curl npm; do
-  command -v "$command" >/dev/null 2>&1 || {
-    printf 'Comando richiesto non disponibile: %s\n' "$command" >&2
-    exit 1
-  }
-done
-
-compose down -v --remove-orphans >/dev/null 2>&1 || true
+docker_run_assert_project_unused "$PROJECT_NAME"
+PROJECT_CLAIMED=1
 compose config --quiet
 sh "$ROOT_DIR/scripts/observability/verify-prometheus-config.sh"
 compose build --pull
@@ -166,7 +233,7 @@ compose exec -T backend wget -qO- \
 sh "$ROOT_DIR/scripts/db/verify-flyway-migrations.sh" \
   "$GESTIONALE_POSTGRES_CONTAINER_NAME" \
   "$POSTGRES_DB" \
-  "$GESTIONALE_DB_USERNAME"
+  "$GESTIONALE_DB_BACKUP_USERNAME"
 sh "$ROOT_DIR/scripts/security/verify-actuator-exposure.sh" \
   "http://127.0.0.1:$GESTIONALE_BACKEND_PORT"
 sh "$ROOT_DIR/scripts/security/verify-container-secrets.sh" \
@@ -224,18 +291,20 @@ sh "$ROOT_DIR/scripts/observability/verify-prometheus-hardening.sh" \
 cd "$ROOT_DIR/web/frontend"
 npm ci
 if [ "${PLAYWRIGHT_INSTALL_WITH_DEPS:-false}" = true ]; then
-  npx playwright install --with-deps chromium
+  npx playwright install --with-deps chromium firefox webkit
 else
-  npx playwright install chromium
+  npx playwright install chromium firefox webkit
 fi
 npm run typecheck:e2e
 npm run test:e2e
 
 cd "$ROOT_DIR"
 sh "$ROOT_DIR/scripts/security/verify-login-rate-limit.sh" "$PLAYWRIGHT_BASE_URL"
+sh "$ROOT_DIR/scripts/security/verify-registration-rate-limit.sh" "$PLAYWRIGHT_BASE_URL"
 compose logs --no-color frontend | grep -q 'limit_req=REJECTED'
 sh "$ROOT_DIR/scripts/db/test-backup-lifecycle.sh"
 sh "$ROOT_DIR/scripts/db/verify-backup-schedule.sh"
 sh "$ROOT_DIR/scripts/db/verify-backup-restore.sh"
+sh "$ROOT_DIR/scripts/db/verify-database-least-privilege.sh"
 
-printf 'Verifica prod-like completata per il progetto %s.\n' "$PROJECT_NAME"
+printf 'Verifica prod-like completata per il progetto %s (run %s).\n' "$PROJECT_NAME" "$RUN_ID"

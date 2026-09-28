@@ -1,7 +1,9 @@
 package it.giovannidefilippo.gestionale.order;
 
+import it.giovannidefilippo.gestionale.common.BusinessTime;
+
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record OrderResponse(
@@ -9,7 +11,13 @@ public record OrderResponse(
         String code,
         String customerCode,
         String customer,
-        LocalDateTime timestamp,
+        Long customerAccountId,
+        Long partnerId,
+        OrderCustomerType customerType,
+        String customerTypeLabel,
+        OrderOwnershipStatus ownershipStatus,
+        String ownershipStatusLabel,
+        OffsetDateTime timestamp,
         String paymentMethod,
         PaymentResponse payment,
         List<OrderItemResponse> items,
@@ -17,29 +25,73 @@ public record OrderResponse(
         BigDecimal total,
         OrderStatus status,
         String statusLabel,
-        LocalDateTime statusChangedAt
+        OffsetDateTime statusChangedAt,
+        String cancellationReference,
+        String cancellationReason,
+        OffsetDateTime canceledAt,
+        String canceledBy,
+        String canceledByRole,
+        OrderCapabilities capabilities
 ) {
     static OrderResponse from(CustomerOrder order) {
+        return from(order, OrderCapabilities.none());
+    }
+
+    static OrderResponse from(CustomerOrder order, OrderCapabilities capabilities) {
         return new OrderResponse(
                 order.getId(),
                 order.getCode(),
                 order.getCustomerCode(),
                 order.getCustomer(),
-                order.getTimestamp(),
+                order.getCustomerAccountId(),
+                order.getPartnerId(),
+                order.getCustomerType(),
+                order.getCustomerType().getLabel(),
+                order.getOwnershipStatus(),
+                order.getOwnershipStatus().getLabel(),
+                BusinessTime.utcOffset(order.getTimestamp()),
                 order.getPaymentMethod(),
                 PaymentResponse.from(order.getPayment()),
-                order.getItems().stream().map(OrderItemResponse::from).toList(),
-                order.getReturns().stream().map(OrderReturnResponse::from).toList(),
+                order.getItems().stream()
+                        .map(item -> OrderItemResponse.from(item, order.returnedOrReservedQuantity(item.getProductCode())))
+                        .toList(),
+                order.getReturns().stream()
+                        .map(orderReturn -> OrderReturnResponse.from(orderReturn, order.getPayment().getTransactions()))
+                        .toList(),
                 order.getTotal(),
                 order.getStatus(),
                 order.getStatus().getLabel(),
-                order.getStatusChangedAt()
+                BusinessTime.utcOffset(order.getStatusChangedAt()),
+                order.getCancellationReference(),
+                order.getCancellationReason(),
+                BusinessTime.utcOffset(order.getCanceledAt()),
+                order.getCanceledBy(),
+                order.getCanceledByRole(),
+                capabilities
         );
     }
 
-    public record OrderItemResponse(String productCode, String productName, int quantity, BigDecimal unitPrice, BigDecimal lineTotal) {
-        static OrderItemResponse from(OrderItem item) {
-            return new OrderItemResponse(item.getProductCode(), item.getProductName(), item.getQuantity(), item.getUnitPrice(), item.getLineTotal());
+    public record OrderItemResponse(
+            String productCode,
+            String productName,
+            String productDescription,
+            int quantity,
+            int returnedOrReservedQuantity,
+            int returnableQuantity,
+            BigDecimal unitPrice,
+            BigDecimal lineTotal
+    ) {
+        static OrderItemResponse from(OrderItem item, int returnedOrReservedQuantity) {
+            return new OrderItemResponse(
+                    item.getProductCode(),
+                    item.getProductName(),
+                    item.getProductDescription(),
+                    item.getQuantity(),
+                    returnedOrReservedQuantity,
+                    Math.max(0, item.getQuantity() - returnedOrReservedQuantity),
+                    item.getUnitPrice(),
+                    item.getLineTotal()
+            );
         }
     }
 
@@ -57,11 +109,18 @@ public record OrderResponse(
             BigDecimal outstandingAmount,
             BigDecimal refundableAmount,
             String currency,
-            LocalDateTime createdAt,
-            LocalDateTime updatedAt,
+            OffsetDateTime createdAt,
+            OffsetDateTime updatedAt,
+            boolean reconciliationRequired,
+            OffsetDateTime reconciledAt,
+            String reconciledBy,
+            String reconciledByRole,
+            String reconciliationReference,
+            String reconciliationReason,
             List<PaymentTransactionResponse> transactions
     ) {
         static PaymentResponse from(OrderPayment payment) {
+            boolean reconciliationRequired = payment.isReconciliationRequired();
             return new PaymentResponse(
                     payment.getId(),
                     payment.getMethod(),
@@ -70,14 +129,20 @@ public record OrderResponse(
                     payment.getStatus(),
                     payment.getStatus().getLabel(),
                     payment.getRequestedAmount(),
-                    payment.getPaidAmount(),
-                    payment.getRefundedAmount(),
-                    payment.getNetPaidAmount(),
-                    payment.getOutstandingAmount(),
-                    payment.getRefundableAmount(),
+                    reconciliationRequired ? null : payment.getPaidAmount(),
+                    reconciliationRequired ? null : payment.getRefundedAmount(),
+                    reconciliationRequired ? null : payment.getNetPaidAmount(),
+                    reconciliationRequired ? null : payment.getOutstandingAmount(),
+                    reconciliationRequired ? null : payment.getRefundableAmount(),
                     payment.getCurrency(),
-                    payment.getCreatedAt(),
-                    payment.getUpdatedAt(),
+                    BusinessTime.utcOffset(payment.getCreatedAt()),
+                    BusinessTime.utcOffset(payment.getUpdatedAt()),
+                    reconciliationRequired,
+                    BusinessTime.utcOffset(payment.getReconciledAt()),
+                    payment.getReconciledBy(),
+                    payment.getReconciledByRole(),
+                    payment.getReconciliationReference(),
+                    payment.getReconciliationReason(),
                     payment.getTransactions().stream().map(PaymentTransactionResponse::from).toList()
             );
         }
@@ -92,7 +157,10 @@ public record OrderResponse(
             String reference,
             String reason,
             String returnCode,
-            LocalDateTime recordedAt,
+            Long returnId,
+            Long cancellationOrderId,
+            Long reconciliationPaymentId,
+            OffsetDateTime recordedAt,
             String recordedBy,
             String recordedByRole
     ) {
@@ -106,7 +174,10 @@ public record OrderResponse(
                     transaction.getReference(),
                     transaction.getReason(),
                     transaction.getReturnCode(),
-                    transaction.getRecordedAt(),
+                    transaction.getReturnId(),
+                    transaction.getCancellationOrderId(),
+                    transaction.getReconciliationPaymentId(),
+                    BusinessTime.utcOffset(transaction.getRecordedAt()),
                     transaction.getRecordedBy(),
                     transaction.getRecordedByRole()
             );
@@ -114,6 +185,7 @@ public record OrderResponse(
     }
 
     public record OrderReturnResponse(
+            Long id,
             String code,
             OrderReturnStatus status,
             String statusLabel,
@@ -122,18 +194,20 @@ public record OrderResponse(
             BigDecimal totalAmount,
             BigDecimal refundedAmount,
             BigDecimal refundableAmount,
-            LocalDateTime requestedAt,
+            OffsetDateTime requestedAt,
             String requestedBy,
             String requestedByRole,
-            LocalDateTime reviewedAt,
+            OffsetDateTime reviewedAt,
             String reviewedBy,
             String reviewNote,
-            LocalDateTime receivedAt,
+            OffsetDateTime receivedAt,
             String receivedBy,
-            LocalDateTime updatedAt
+            OffsetDateTime updatedAt,
+            List<PaymentTransactionResponse> refundTransactions
     ) {
-        static OrderReturnResponse from(OrderReturn orderReturn) {
+        static OrderReturnResponse from(OrderReturn orderReturn, List<PaymentTransaction> paymentTransactions) {
             return new OrderReturnResponse(
+                    orderReturn.getId(),
                     orderReturn.getCode(),
                     orderReturn.getStatus(),
                     orderReturn.getStatus().getLabel(),
@@ -142,16 +216,34 @@ public record OrderResponse(
                     orderReturn.getTotalAmount(),
                     orderReturn.getRefundedAmount(),
                     orderReturn.getRefundableAmount(),
-                    orderReturn.getRequestedAt(),
+                    BusinessTime.utcOffset(orderReturn.getRequestedAt()),
                     orderReturn.getRequestedBy(),
                     orderReturn.getRequestedByRole(),
-                    orderReturn.getReviewedAt(),
+                    BusinessTime.utcOffset(orderReturn.getReviewedAt()),
                     orderReturn.getReviewedBy(),
                     orderReturn.getReviewNote(),
-                    orderReturn.getReceivedAt(),
+                    BusinessTime.utcOffset(orderReturn.getReceivedAt()),
                     orderReturn.getReceivedBy(),
-                    orderReturn.getUpdatedAt()
+                    BusinessTime.utcOffset(orderReturn.getUpdatedAt()),
+                    paymentTransactions.stream()
+                            .filter(transaction -> belongsToReturn(transaction, orderReturn))
+                            .map(PaymentTransactionResponse::from)
+                            .toList()
             );
+        }
+
+        private static boolean belongsToReturn(PaymentTransaction transaction, OrderReturn orderReturn) {
+            if (transaction.getType() != PaymentTransactionType.REFUND) {
+                return false;
+            }
+            Long returnId = orderReturn.getId();
+            Long transactionReturnId = transaction.getReturnId();
+            if (returnId != null && transactionReturnId != null) {
+                return returnId.equals(transactionReturnId);
+            }
+            return transactionReturnId == null
+                    && transaction.getReturnCode() != null
+                    && transaction.getReturnCode().equalsIgnoreCase(orderReturn.getCode());
         }
     }
 

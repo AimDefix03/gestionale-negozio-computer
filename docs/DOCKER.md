@@ -30,6 +30,9 @@ Questo ambiente e pensato per test prod-like, demo controllate e CI. Non e ancor
 - `scripts/db/test-backup-lifecycle.sh`
 - `scripts/db/restore-drill-latest.sh`
 - `scripts/db/verify-backup-restore.sh`
+- `scripts/db/provision-database-roles.sh`
+- `scripts/db/rotate-database-role-passwords.sh`
+- `scripts/db/verify-database-least-privilege.sh`
 - `scripts/e2e/run-web-smoke.sh`
 - `scripts/security/verify-login-rate-limit.sh`
 - `scripts/security/verify-browser-security.sh`
@@ -48,7 +51,7 @@ cp .env.docker.example .env.docker
 
 Aggiornare almeno:
 
-- `GESTIONALE_DB_PASSWORD_SECRET_FILE` con un file esterno al repository;
+- i cinque percorsi `GESTIONALE_DB_*_PASSWORD_SECRET_FILE` per bootstrap, migrator, runtime, backup e restore, usando file distinti esterni al repository;
 - `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME`;
 - `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_SECRET_FILE` solo per il primo avvio.
 
@@ -88,9 +91,11 @@ La gestione completa dei segreti e descritta in `docs/SECRET_ROTATION.md`.
 
 - Frontend: `http://localhost:8081`
 - Backend API locale: `http://127.0.0.1:8080`
-- PostgreSQL host locale: `localhost:5433`
+- PostgreSQL host locale: `127.0.0.1:5433`
 
-La porta backend e pubblicata esclusivamente su `127.0.0.1` per diagnostica locale. Le richieste esterne devono attraversare Nginx; in produzione e preferibile non pubblicare affatto la porta backend. Actuator usa la porta interna `9090`, non pubblicata sull'host: il container espone `health` e `prometheus`, nasconde i dettagli health e distingue liveness da readiness.
+Le porte backend e PostgreSQL sono pubblicate esclusivamente su `127.0.0.1` per diagnostica locale. Le richieste esterne devono attraversare Nginx; in produzione e preferibile non pubblicare nessuna delle due. Actuator usa la porta interna `9090`, non pubblicata sull'host: il container espone `health` e `prometheus`, nasconde i dettagli health e distingue liveness da readiness.
+
+PostgreSQL separa owner `NOLOGIN`, migrator Flyway, runtime DML, backup read-only e restore. Il backend riceve soltanto runtime e migrator. I job operativi ricevono esclusivamente l'identita necessaria al proprio compito.
 
 Internamente i container comunicano cosi:
 
@@ -138,11 +143,13 @@ Log backend:
 docker compose --env-file .env.docker -f docker-compose.prod-like.yml -f docker-compose.secrets.yml logs -f backend
 ```
 
-Accesso PostgreSQL via `psql` dentro al container:
+Accesso PostgreSQL di emergenza dentro al container con l'identita bootstrap:
 
 ```bash
 docker compose --env-file .env.docker -f docker-compose.prod-like.yml -f docker-compose.secrets.yml exec postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
+
+Questa sessione e amministrativa e non deve essere usata dall'applicazione o per operazioni ordinarie. Ogni intervento deve essere autorizzato e auditato nell'ambiente reale.
 
 Backup database:
 
@@ -164,6 +171,7 @@ Verifica backup/restore su database isolato:
 scripts/db/test-backup-lifecycle.sh
 scripts/db/verify-backup-schedule.sh
 scripts/db/verify-backup-restore.sh
+scripts/db/verify-database-least-privilege.sh
 ```
 
 Il backup giornaliero e il restore drill settimanale sono forniti come timer systemd. Configurazione, installazione, retention e obiettivi RPO/RTO sono descritti in `docs/BACKUP_RESTORE.md`.
@@ -177,7 +185,7 @@ GESTIONALE_E2E_DB_PASSWORD=password_database_e2e \
 scripts/e2e/run-web-smoke.sh
 ```
 
-Lo script usa container, porte e volume dedicati al progetto Compose `gestionale-e2e`, poi rimuove container, rete e volume E2E senza modificare i dati dello stack operativo. Oltre ai flussi browser, verifica il rate limiting del login e la relativa traccia nei log Nginx. Le password sono scritte in file effimeri, montate soltanto nei servizi autorizzati e controllate tramite `docker inspect` per escludere valori diretti dalla configurazione container.
+Lo script genera un progetto Compose casuale con prefisso `gestionale-e2e-`, applica project e run ID a tutte le risorse e rimuove soltanto gli ID di cui ha verificato l'ownership. Oltre ai flussi browser, verifica il rate limiting del login e la relativa traccia nei log Nginx. Le password sono scritte in file effimeri, montate soltanto nei servizi autorizzati e controllate tramite `docker inspect` per escludere valori diretti dalla configurazione container.
 
 Verifica isolata di CSP, header browser e cache su uno stack gia avviato:
 
@@ -233,11 +241,15 @@ Spegnimento senza cancellare i dati:
 docker compose --env-file .env.docker -f docker-compose.prod-like.yml -f docker-compose.secrets.yml down
 ```
 
-Spegnimento con cancellazione volume database:
+La cancellazione del volume database non fa parte delle procedure documentate: deve essere autorizzata separatamente e non va usata come cleanup dei runner di test.
+
+Per recuperare risorse lasciate da una run terminata con `SIGKILL`, usare esclusivamente project name e run ID registrati nella diagnostica:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.prod-like.yml -f docker-compose.secrets.yml down -v
+scripts/ci/cleanup-docker-run.sh <project-name> <run-id>
 ```
+
+Il cleanup si arresta se trova una risorsa senza entrambe le label attese.
 
 ## Controllo CI
 
@@ -255,7 +267,7 @@ La workflow `.github/workflows/ci.yml` costruisce le immagini, avvia lo stack pr
 - processi container non-root, root filesystem read-only, capability eliminate e soli percorsi runtime autorizzati scrivibili.
 - configurazione Prometheus, metriche backend, log JSON, regole alert e hardening del container di monitoraggio.
 - tutte le migrazioni Flyway presenti e applicate con successo sul PostgreSQL reale.
-- cleanup finale senza container, volumi o reti residue.
+- cleanup finale per ID inventariati, con ownership project/run verificata e senza container, volumi o reti residue.
 
 In CI il bootstrap super admin e temporaneo e confinato allo stack effimero della pipeline. La stessa procedura puo essere riprodotta con `scripts/ci/run-prod-like-verification.sh`, viene schedulata settimanalmente e conserva sempre la diagnostica descritta in `docs/PROD_LIKE_VERIFICATION.md`.
 

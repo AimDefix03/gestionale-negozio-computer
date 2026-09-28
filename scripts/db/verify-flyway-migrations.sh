@@ -5,7 +5,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 MIGRATION_DIR="$ROOT_DIR/web/backend/src/main/resources/db/migration"
 POSTGRES_CONTAINER=${1:-gestionale-prodlike-postgres}
 DATABASE_NAME=${2:-${POSTGRES_DB:-gestionale}}
-DATABASE_USER=${3:-${GESTIONALE_DB_USERNAME:-gestionale_app}}
+DATABASE_USER=${3:-${GESTIONALE_DB_BACKUP_USERNAME:-gestionale_backup}}
 
 latest_expected=$(
   find "$MIGRATION_DIR" -maxdepth 1 -type f -name 'V*__*.sql' -print |

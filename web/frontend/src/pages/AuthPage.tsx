@@ -1,7 +1,6 @@
 import { FormEvent } from 'react';
 import usePasswordStrength from '../hooks/usePasswordStrength';
 import { AuthFormState, AuthMode } from '../types/ui';
-import { UserRole } from '../api';
 
 type Props = {
   mode: AuthMode;
@@ -20,9 +19,6 @@ export default function AuthPage({ mode, form, passwordVisible, busy, message, o
 
   function selectMode(nextMode: AuthMode) {
     onModeChange(nextMode);
-    if (nextMode === 'register') {
-      onFormChange({ ...form, role: form.role === 'CUSTOMER' ? 'CUSTOMER' : 'EMPLOYEE' });
-    }
   }
 
   return (
@@ -35,8 +31,8 @@ export default function AuthPage({ mode, form, passwordVisible, busy, message, o
         <form onSubmit={onSubmit} className="product-form">
           <div className="section-heading compact">
             <span>{mode === 'login' ? 'Accesso' : 'Registrazione'}</span>
-            <h2>{mode === 'login' ? 'Accedi al workspace' : 'Crea un profilo operativo'}</h2>
-            <p>{mode === 'login' ? 'Usa le credenziali assegnate per entrare nel workspace.' : 'La registrazione pubblica crea profili dipendente o cliente.'}</p>
+            <h2>{mode === 'login' ? 'Accedi al workspace' : 'Crea il tuo profilo cliente'}</h2>
+            <p>{mode === 'login' ? 'Usa le credenziali assegnate per entrare nel workspace.' : 'La registrazione pubblica crea esclusivamente un account cliente.'}</p>
           </div>
           <div className="segmented">
             <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => selectMode('login')}>Login</button>
@@ -50,14 +46,6 @@ export default function AuthPage({ mode, form, passwordVisible, busy, message, o
             </div>
           </label>
           {passwordStrength && <p className={`strength ${passwordStrength.strength.toLowerCase()}`}>Password: {passwordStrength.label}</p>}
-          <label>Ruolo
-            <select value={form.role} onChange={(event) => onFormChange({ ...form, role: event.target.value as UserRole })}>
-              {mode === 'login' && <option value="SUPER_ADMIN">Super admin</option>}
-              {mode === 'login' && <option value="ADMIN">Admin</option>}
-              <option value="EMPLOYEE">Dipendente</option>
-              <option value="CUSTOMER">Cliente</option>
-            </select>
-          </label>
           {message && <div className="alert" role="alert">{message}</div>}
           <button className="button primary" disabled={busy}>{busy ? 'Attendi...' : mode === 'login' ? 'Accedi' : 'Registrati'}</button>
         </form>

@@ -9,10 +9,13 @@ type Props = {
   selectedCodes: string[];
   activeProductCode?: string;
   canManage: boolean;
+  canAddToCart?: boolean;
+  context?: 'catalog' | 'sales';
+  busy: boolean;
   onQueryChange: (query: ProductQuery) => void;
   onPageChange: (page: number) => void;
   onSelectionChange: (codes: string[]) => void;
-  onView: (product: Product) => void;
+  onView?: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDeleteOne: (code: string) => void;
   onDiscontinue: (code: string) => void;
@@ -25,11 +28,11 @@ type SortMode = 'NAME_ASC' | 'PRICE_ASC' | 'PRICE_DESC' | 'QTY_ASC' | 'QTY_DESC'
 
 const money = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
 
-export default function ProductTable({ page, filterSource, query, selectedCodes, activeProductCode, canManage, onQueryChange, onPageChange, onSelectionChange, onView, onEdit, onDeleteOne, onDiscontinue, onDeleteSelected, onAddToCart }: Props) {
+export default function ProductTable({ page, filterSource, query, selectedCodes, activeProductCode, canManage, canAddToCart = false, context = 'catalog', busy, onQueryChange, onPageChange, onSelectionChange, onView, onEdit, onDeleteOne, onDiscontinue, onDeleteSelected, onAddToCart }: Props) {
   const products = page.content;
   const brands = useMemo(() => uniqueValues(filterSource.map((product) => product.brand)), [filterSource]);
   const productTypes = useMemo(() => uniqueValues(filterSource.map((product) => product.productType)), [filterSource]);
-  const visibleCodes = products.map((product) => product.code);
+  const visibleCodes = products.filter((product) => product.capabilities.canDelete).map((product) => product.code);
   const allVisibleSelected = visibleCodes.length > 0 && visibleCodes.every((code) => selectedCodes.includes(code));
 
   function updateQuery(nextQuery: ProductQuery) {
@@ -60,13 +63,13 @@ export default function ProductTable({ page, filterSource, query, selectedCodes,
     <section className="panel catalog-panel">
       <div className="panel-toolbar">
         <div className="section-heading compact">
-          <span>Inventario</span>
-          <h2>Catalogo prodotti</h2>
-          <p>Ricerca, filtri e stato stock del catalogo operativo.</p>
+          <span>{context === 'sales' ? 'Vendita' : 'Inventario'}</span>
+          <h2>{context === 'sales' ? 'Prodotti vendibili' : 'Catalogo prodotti'}</h2>
+          <p>{context === 'sales' ? 'Ricerca i prodotti disponibili e aggiungili alla bozza.' : 'Ricerca, filtri e stato stock del catalogo operativo.'}</p>
         </div>
         <div className="toolbar-actions">
           <span className="result-pill">{page.content.length} / {page.totalElements}</span>
-          {canManage && <button className="button danger" disabled={selectedCodes.length === 0} onClick={onDeleteSelected}>Elimina selezionati</button>}
+          {canManage && <button className="button danger" disabled={busy || selectedCodes.length === 0} onClick={onDeleteSelected}>Elimina selezionati</button>}
         </div>
       </div>
 
@@ -126,15 +129,16 @@ export default function ProductTable({ page, filterSource, query, selectedCodes,
       ) : (
         <div className="table-shell catalog-table-shell">
           <table>
+            <caption className="sr-only">{context === 'sales' ? 'Prodotti vendibili' : 'Catalogo prodotti'}</caption>
             <thead>
               <tr>
-                {canManage && <th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} /></th>}
-                <th>Codice</th>
-                <th>Prodotto</th>
-                <th>Classificazione</th>
-                <th>Stock</th>
-                <th>Prezzo</th>
-                <th>Azioni</th>
+                {canManage && <th scope="col"><input type="checkbox" aria-label="Seleziona tutti i prodotti eliminabili nella pagina" checked={allVisibleSelected} onChange={toggleAll} /></th>}
+                <th scope="col">Codice</th>
+                <th scope="col">Prodotto</th>
+                <th scope="col">Classificazione</th>
+                <th scope="col">Stock</th>
+                <th scope="col">Prezzo</th>
+                <th scope="col">Azioni</th>
               </tr>
             </thead>
             <tbody>
@@ -143,8 +147,8 @@ export default function ProductTable({ page, filterSource, query, selectedCodes,
 
                 return (
                   <tr key={product.id} className={activeProductCode === product.code ? 'active-row' : ''}>
-                    {canManage && <td><input type="checkbox" checked={selectedCodes.includes(product.code)} onChange={() => toggleProduct(product.code)} /></td>}
-                    <td className="strong">{product.code}</td>
+                    {canManage && <td><input type="checkbox" aria-label={`Seleziona ${product.code}`} disabled={!product.capabilities.canDelete} checked={selectedCodes.includes(product.code)} onChange={() => toggleProduct(product.code)} /></td>}
+                    <th scope="row" className="strong">{product.code}</th>
                     <td>
                       <div className="product-cell">
                         <strong>{product.name}</strong>
@@ -173,16 +177,17 @@ export default function ProductTable({ page, filterSource, query, selectedCodes,
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="link-button" onClick={() => onView(product)}>Dettaglio</button>
+                        {onView && <button className="link-button" onClick={() => onView(product)}>Dettaglio</button>}
                         {canManage ? (
                           <>
-                            <button className="link-button" onClick={() => onEdit(product)}>Modifica</button>
-                            {!product.discontinued && <button className="link-button" onClick={() => onDiscontinue(product.code)}>Disattiva</button>}
-                            <button className="link-button danger-text" onClick={() => onDeleteOne(product.code)}>Elimina</button>
+                            {product.capabilities.canEdit && <button className="link-button" disabled={busy} onClick={() => onEdit(product)}>Modifica</button>}
+                            {product.capabilities.canDiscontinue && <button className="link-button" disabled={busy} onClick={() => onDiscontinue(product.code)}>Disattiva</button>}
+                            {product.capabilities.canDelete && <button className="link-button danger-text" disabled={busy} onClick={() => onDeleteOne(product.code)}>Elimina</button>}
+                            {!product.capabilities.canEdit && !product.capabilities.canDiscontinue && !product.capabilities.canDelete && <span className="locked-action">Nessuna azione</span>}
                           </>
-                        ) : (
-                          <button className="link-button" disabled={product.availableQuantity === 0 || product.discontinued} onClick={() => onAddToCart?.(product)}>Aggiungi</button>
-                        )}
+                        ) : canAddToCart ? (
+                          <button className="link-button" disabled={busy || product.availableQuantity === 0 || product.discontinued} onClick={() => onAddToCart?.(product)}>Aggiungi</button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

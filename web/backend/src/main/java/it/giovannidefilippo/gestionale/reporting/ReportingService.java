@@ -1,6 +1,8 @@
 package it.giovannidefilippo.gestionale.reporting;
 
 import it.giovannidefilippo.gestionale.common.TimeProvider;
+import it.giovannidefilippo.gestionale.common.BusinessTime;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
 import it.giovannidefilippo.gestionale.order.OrderStatus;
 import it.giovannidefilippo.gestionale.order.SalesOrderItemReportSource;
 import it.giovannidefilippo.gestionale.order.SalesOrderReportSource;
@@ -14,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -31,19 +35,25 @@ public class ReportingService {
     private final SalesReportingUsage salesReportingUsage;
     private final InventoryReportingUsage inventoryReportingUsage;
     private final TimeProvider timeProvider;
+    private final CompanySettingsService companySettingsService;
 
-    ReportingService(SalesReportingUsage salesReportingUsage, InventoryReportingUsage inventoryReportingUsage, TimeProvider timeProvider) {
+    ReportingService(SalesReportingUsage salesReportingUsage, InventoryReportingUsage inventoryReportingUsage, TimeProvider timeProvider, CompanySettingsService companySettingsService) {
         this.salesReportingUsage = salesReportingUsage;
         this.inventoryReportingUsage = inventoryReportingUsage;
         this.timeProvider = timeProvider;
+        this.companySettingsService = companySettingsService;
     }
 
     public SalesReportResponse sales(LocalDate requestedFrom, LocalDate requestedTo, OrderStatus status) {
-        LocalDate today = timeProvider.localDateTime().toLocalDate();
+        String timeZone = companySettingsService.current().timeZone();
+        var zoneId = BusinessTime.requireZoneId(timeZone);
+        LocalDate today = timeProvider.instant().atZone(zoneId).toLocalDate();
         LocalDate from = requestedFrom == null ? today.withDayOfYear(1) : requestedFrom;
         LocalDate to = requestedTo == null ? today : requestedTo;
         validatePeriod(from, to);
-        List<SalesOrderReportSource> sources = salesReportingUsage.findForReport(from, to, status, MAX_REPORT_ROWS);
+        LocalDateTime startInclusiveUtc = LocalDateTime.ofInstant(from.atStartOfDay(zoneId).toInstant(), ZoneOffset.UTC);
+        LocalDateTime endExclusiveUtc = LocalDateTime.ofInstant(to.plusDays(1).atStartOfDay(zoneId).toInstant(), ZoneOffset.UTC);
+        List<SalesOrderReportSource> sources = salesReportingUsage.findForReport(startInclusiveUtc, endExclusiveUtc, status, MAX_REPORT_ROWS);
         List<SalesReportResponse.SalesOrderRow> rows = sources.stream()
                 .map(ReportingService::toSalesRow)
                 .toList();
@@ -58,7 +68,7 @@ public class ReportingService {
         String statusValue = status == null ? "ALL" : status.name();
         String statusLabel = status == null ? "Tutti gli stati" : status.getLabel();
         return new SalesReportResponse(
-                timeProvider.localDateTime(),
+                BusinessTime.utcOffset(timeProvider.localDateTime()),
                 from,
                 to,
                 statusValue,
@@ -83,17 +93,30 @@ public class ReportingService {
         long physical = sources.stream().mapToLong(InventoryProductReportSource::quantity).sum();
         long reserved = sources.stream().mapToLong(InventoryProductReportSource::reservedQuantity).sum();
         long available = sources.stream().mapToLong(InventoryProductReportSource::availableQuantity).sum();
-        BigDecimal inventoryValue = sum(rows.stream().map(InventoryReportResponse.InventoryProductRow::stockValue).toList());
+        BigDecimal potentialRetailStockValue = sum(rows.stream().map(InventoryReportResponse.InventoryProductRow::potentialRetailValue).toList());
+        BigDecimal knownInventoryCostValue = sum(rows.stream().map(InventoryReportResponse.InventoryProductRow::knownInventoryCost).toList());
+        BigDecimal potentialGrossMargin = sum(rows.stream().map(InventoryReportResponse.InventoryProductRow::potentialGrossMarginOnCostedStock).toList());
+        long costedUnits = sources.stream().mapToLong(InventoryProductReportSource::costedQuantity).sum();
+        long uncostedUnits = sources.stream().mapToLong(InventoryProductReportSource::uncostedQuantity).sum();
+        BigDecimal costCoverage = physical == 0
+                ? money(BigDecimal.ZERO)
+                : BigDecimal.valueOf(costedUnits).multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(physical), 2, RoundingMode.HALF_UP);
         long lowStock = sources.stream().filter(source -> source.availableQuantity() > 0 && source.availableQuantity() <= LOW_STOCK_THRESHOLD).count();
         long outOfStock = sources.stream().filter(source -> source.availableQuantity() == 0).count();
         long discontinuedCount = sources.stream().filter(InventoryProductReportSource::discontinued).count();
         return new InventoryReportResponse(
-                timeProvider.localDateTime(),
+                BusinessTime.utcOffset(timeProvider.localDateTime()),
                 sources.size(),
                 physical,
                 reserved,
                 available,
-                inventoryValue,
+                potentialRetailStockValue,
+                knownInventoryCostValue,
+                potentialGrossMargin,
+                costedUnits,
+                uncostedUnits,
+                costCoverage,
                 lowStock,
                 outOfStock,
                 discontinuedCount,
@@ -113,7 +136,7 @@ public class ReportingService {
     private static SalesReportResponse.SalesOrderRow toSalesRow(SalesOrderReportSource source) {
         return new SalesReportResponse.SalesOrderRow(
                 source.code(),
-                source.timestamp(),
+                BusinessTime.utcOffset(source.timestamp()),
                 source.customer(),
                 source.status().name(),
                 source.status().getLabel(),
@@ -147,7 +170,7 @@ public class ReportingService {
 
     private static InventoryReportResponse.InventoryProductRow toInventoryRow(InventoryProductReportSource source) {
         StockState stockState = StockState.from(source.availableQuantity());
-        BigDecimal stockValue = source.discountedPrice().multiply(BigDecimal.valueOf(source.quantity()));
+        BigDecimal potentialRetailValue = source.discountedPrice().multiply(BigDecimal.valueOf(source.quantity()));
         return new InventoryReportResponse.InventoryProductRow(
                 source.code(),
                 source.name(),
@@ -161,7 +184,14 @@ public class ReportingService {
                 money(source.price()),
                 source.discount().setScale(2, RoundingMode.HALF_UP),
                 money(source.discountedPrice()),
-                money(stockValue),
+                money(potentialRetailValue),
+                source.lastPurchaseCost(),
+                source.averagePurchaseCost(),
+                source.costedQuantity(),
+                source.uncostedQuantity(),
+                source.costCoveragePercentage(),
+                source.knownInventoryCost(),
+                source.potentialGrossMarginOnCostedStock(),
                 source.discontinued(),
                 stockState.name(),
                 stockState.label

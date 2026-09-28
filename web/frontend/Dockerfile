@@ -21,7 +21,10 @@ COPY --from=build /workspace/dist /usr/share/nginx/html
 RUN NGINX_LOGIN_RATE=10r/m \
     NGINX_LOGIN_BURST=10 \
     NGINX_LOGIN_RETRY_AFTER_SECONDS=60 \
-    envsubst '${NGINX_LOGIN_RATE} ${NGINX_LOGIN_BURST} ${NGINX_LOGIN_RETRY_AFTER_SECONDS}' \
+    NGINX_REGISTER_RATE=5r/m \
+    NGINX_REGISTER_BURST=5 \
+    NGINX_REGISTER_RETRY_AFTER_SECONDS=60 \
+    envsubst '${NGINX_LOGIN_RATE} ${NGINX_LOGIN_BURST} ${NGINX_LOGIN_RETRY_AFTER_SECONDS} ${NGINX_REGISTER_RATE} ${NGINX_REGISTER_BURST} ${NGINX_REGISTER_RETRY_AFTER_SECONDS}' \
     < /etc/nginx/templates/default.conf.template \
     > /tmp/default.conf \
     && sed -i 's#http://backend:8080#http://127.0.0.1:8080#g' /tmp/default.conf \

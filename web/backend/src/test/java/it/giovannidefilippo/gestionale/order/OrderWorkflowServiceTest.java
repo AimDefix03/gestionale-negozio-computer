@@ -2,12 +2,16 @@ package it.giovannidefilippo.gestionale.order;
 
 import it.giovannidefilippo.gestionale.document.FiscalDocumentRequests;
 import it.giovannidefilippo.gestionale.document.FiscalDocumentService;
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
+import it.giovannidefilippo.gestionale.common.TestCompanySettings;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
 import it.giovannidefilippo.gestionale.product.ProductCategory;
 import it.giovannidefilippo.gestionale.product.ProductRequest;
 import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +34,17 @@ class OrderWorkflowServiceTest {
 
     @Autowired
     private FiscalDocumentService documentService;
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
+    private CompanySettingsService companySettingsService;
+
+    @BeforeEach
+    void configureCompany() {
+        TestCompanySettings.configure(companySettingsService, actor());
+    }
 
     @Test
     void confirmedOrderReservesStockAndFulfillmentUnloadsPhysicalStock() {
@@ -63,7 +78,7 @@ class OrderWorkflowServiceTest {
         OrderResponse draft = createOrder(productCode, 3);
         orderService.confirm(draft.code(), actor());
 
-        OrderResponse canceled = orderService.cancel(draft.code(), actor());
+        OrderResponse canceled = orderService.cancel(draft.code(), cancellation(), actor());
 
         assertThat(canceled.status()).isEqualTo(OrderStatus.CANCELED);
         assertThat(productService.findByCode(productCode).quantity()).isEqualTo(5);
@@ -99,7 +114,7 @@ class OrderWorkflowServiceTest {
         orderService.confirm(draft.code(), actor());
         orderService.fulfill(draft.code(), actor());
 
-        assertThatThrownBy(() -> orderService.cancel(draft.code(), actor()))
+        assertThatThrownBy(() -> orderService.cancel(draft.code(), cancellation(), actor()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bozza o confermati");
     }
@@ -142,14 +157,18 @@ class OrderWorkflowServiceTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                quantity,
                 new BigDecimal("100.00"),
                 new BigDecimal("0.00")
         ));
+        inventoryService.initialBalance(code, quantity, "Saldo iniziale workflow", "test", "Test");
         return code;
     }
 
     private static AuthenticatedUser actor() {
         return new AuthenticatedUser("admin", UserRole.SUPER_ADMIN);
+    }
+
+    private static OrderOperationRequests.CancellationRequest cancellation() {
+        return new OrderOperationRequests.CancellationRequest("", "Annullamento richiesto dal test");
     }
 }

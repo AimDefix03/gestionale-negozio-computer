@@ -7,6 +7,7 @@ public enum AuditCategory {
     PRODUCT,
     INVENTORY,
     ORDER,
+    PURCHASE,
     DOCUMENT,
     REPORT,
     SYSTEM

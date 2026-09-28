@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -47,6 +48,17 @@ public class PaymentTransaction {
     @Column(length = 40)
     private String returnCode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "return_id")
+    private OrderReturn orderReturn;
+
+    @Column(name = "cancellation_order_id")
+    private Long cancellationOrderId;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reconciliation_payment_id", unique = true)
+    private OrderPayment reconciliationPayment;
+
     @Column(nullable = false)
     private LocalDateTime recordedAt;
 
@@ -59,16 +71,34 @@ public class PaymentTransaction {
     protected PaymentTransaction() {
     }
 
-    PaymentTransaction(String code, PaymentTransactionType type, BigDecimal amount, String reference, String reason, String returnCode, LocalDateTime recordedAt, String recordedBy, String recordedByRole) {
+    private PaymentTransaction(String code, PaymentTransactionType type, BigDecimal amount, String reference, String reason, OrderReturn orderReturn, Long cancellationOrderId, LocalDateTime recordedAt, String recordedBy, String recordedByRole) {
         this.code = required(code, "Il codice movimento e obbligatorio.");
         this.type = Objects.requireNonNull(type);
         this.amount = positiveMoney(amount);
         this.reference = optional(reference);
         this.reason = required(reason, "La causale del movimento e obbligatoria.");
-        this.returnCode = optional(returnCode);
+        this.orderReturn = orderReturn;
+        this.returnCode = orderReturn == null ? null : orderReturn.getCode();
+        this.cancellationOrderId = cancellationOrderId;
         this.recordedAt = Objects.requireNonNull(recordedAt);
         this.recordedBy = required(recordedBy, "L'operatore e obbligatorio.");
         this.recordedByRole = required(recordedByRole, "Il ruolo operatore e obbligatorio.");
+    }
+
+    static PaymentTransaction receipt(String code, BigDecimal amount, String reference, String reason, LocalDateTime recordedAt, String recordedBy, String recordedByRole) {
+        return new PaymentTransaction(code, PaymentTransactionType.RECEIPT, amount, reference, reason, null, null, recordedAt, recordedBy, recordedByRole);
+    }
+
+    static PaymentTransaction refund(String code, OrderReturn orderReturn, BigDecimal amount, String reference, String reason, LocalDateTime recordedAt, String recordedBy, String recordedByRole) {
+        return new PaymentTransaction(code, PaymentTransactionType.REFUND, amount, reference, reason, Objects.requireNonNull(orderReturn), null, recordedAt, recordedBy, recordedByRole);
+    }
+
+    static PaymentTransaction reversal(String code, Long cancellationOrderId, BigDecimal amount, String reference, String reason, LocalDateTime recordedAt, String recordedBy, String recordedByRole) {
+        return new PaymentTransaction(code, PaymentTransactionType.REVERSAL, amount, reference, reason, null, Objects.requireNonNull(cancellationOrderId), recordedAt, recordedBy, recordedByRole);
+    }
+
+    static PaymentTransaction reconciliation(String code, BigDecimal amount, String reference, String reason, LocalDateTime recordedAt, String recordedBy, String recordedByRole) {
+        return new PaymentTransaction(code, PaymentTransactionType.RECONCILIATION, amount, reference, reason, null, null, recordedAt, recordedBy, recordedByRole);
     }
 
     void assignPayment(OrderPayment payment) {
@@ -76,6 +106,9 @@ public class PaymentTransaction {
             throw new IllegalStateException("Il movimento e gia associato a un pagamento.");
         }
         this.payment = Objects.requireNonNull(payment);
+        if (type == PaymentTransactionType.RECONCILIATION) {
+            reconciliationPayment = payment;
+        }
     }
 
     public Long getId() { return id; }
@@ -85,6 +118,9 @@ public class PaymentTransaction {
     public String getReference() { return reference; }
     public String getReason() { return reason; }
     public String getReturnCode() { return returnCode; }
+    public Long getReturnId() { return orderReturn == null ? null : orderReturn.getId(); }
+    public Long getCancellationOrderId() { return cancellationOrderId; }
+    public Long getReconciliationPaymentId() { return reconciliationPayment == null ? null : reconciliationPayment.getId(); }
     public LocalDateTime getRecordedAt() { return recordedAt; }
     public String getRecordedBy() { return recordedBy; }
     public String getRecordedByRole() { return recordedByRole; }
@@ -105,6 +141,6 @@ public class PaymentTransaction {
     }
 
     private static String optional(String value) {
-        return value == null ? "" : value.trim();
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

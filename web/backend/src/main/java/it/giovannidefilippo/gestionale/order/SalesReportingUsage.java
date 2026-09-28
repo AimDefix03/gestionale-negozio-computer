@@ -1,8 +1,8 @@
 package it.giovannidefilippo.gestionale.order;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface SalesReportingUsage {
-    List<SalesOrderReportSource> findForReport(LocalDate from, LocalDate to, OrderStatus status, int maxRows);
+    List<SalesOrderReportSource> findForReport(LocalDateTime startInclusiveUtc, LocalDateTime endExclusiveUtc, OrderStatus status, int maxRows);
 }

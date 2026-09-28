@@ -92,6 +92,26 @@ jobs:
       - name: Resolve dependency tree
         run: mvn -B -DskipTests dependency:tree
 
+      - name: Package backend for startup checks
+        run: mvn -B -DskipTests package
+
+      - name: Verify fail-closed startup
+        run: ../../scripts/security/verify-backend-fail-closed.sh target/gestionale-api-0.1.0.jar
+
+      - name: Scan backend dependencies
+        run: mvn -B dependency-check:check
+
+      - name: Upload dependency scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dependency-check-${{ github.sha }}
+          path: |
+            web/backend/target/dependency-check-report.html
+            web/backend/target/dependency-check-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
   codeql:
     name: CodeQL analysis
     runs-on: ubuntu-latest

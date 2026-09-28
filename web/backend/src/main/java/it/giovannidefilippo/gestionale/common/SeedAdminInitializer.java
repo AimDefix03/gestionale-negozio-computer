@@ -4,31 +4,31 @@ import it.giovannidefilippo.gestionale.user.UserRole;
 import it.giovannidefilippo.gestionale.user.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 @Component
 class SeedAdminInitializer implements CommandLineRunner {
     private static final String DEFAULT_LOCAL_USERNAME = "admin";
-    private static final String DEFAULT_LOCAL_PASSWORD = "RootSecure123!";
+    private static final String DEFAULT_LOCAL_PASSWORD_SHA_256 =
+            "0b6ac2ff5d25df4074c23e1cc44689786ae67d148194cae8b4c16fe14ce2feb6";
 
     private final UserService userService;
-    private final Environment environment;
     private final boolean enabled;
     private final String username;
     private final String password;
 
     SeedAdminInitializer(
             UserService userService,
-            Environment environment,
             @Value("${gestionale.bootstrap.super-admin.enabled:false}") boolean enabled,
             @Value("${gestionale.bootstrap.super-admin.username:}") String username,
             @Value("${gestionale.bootstrap.super-admin.password:}") String password
     ) {
         this.userService = userService;
-        this.environment = environment;
         this.enabled = enabled;
         this.username = username;
         this.password = password;
@@ -53,21 +53,22 @@ class SeedAdminInitializer implements CommandLineRunner {
         if (password == null || password.isBlank()) {
             throw new IllegalStateException("Configura GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD per inizializzare il super admin.");
         }
-        if (isProductionProfile()) {
-            validateProductionCredentials();
-        }
-    }
-
-    private void validateProductionCredentials() {
-        if (DEFAULT_LOCAL_USERNAME.equalsIgnoreCase(username.trim()) || DEFAULT_LOCAL_PASSWORD.equals(password)) {
-            throw new IllegalStateException("Le credenziali locali di default non possono essere usate per il bootstrap in produzione.");
+        if (DEFAULT_LOCAL_USERNAME.equalsIgnoreCase(username.trim()) || matchesDefaultLocalPassword(password)) {
+            throw new IllegalStateException("Le credenziali locali di default non possono essere usate per il bootstrap.");
         }
         if (password.length() < 12 || !password.matches(".*[A-Z].*") || !password.matches(".*[a-z].*") || !password.matches(".*[0-9].*") || !password.matches(".*[^A-Za-z0-9].*")) {
-            throw new IllegalStateException("La password del super admin di produzione deve avere almeno 12 caratteri, maiuscole, minuscole, numeri e simboli.");
+            throw new IllegalStateException("La password del super admin deve avere almeno 12 caratteri, maiuscole, minuscole, numeri e simboli.");
         }
     }
 
-    private boolean isProductionProfile() {
-        return Arrays.stream(environment.getActiveProfiles()).anyMatch("prod"::equalsIgnoreCase);
+    private boolean matchesDefaultLocalPassword(String candidate) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(candidate.getBytes(StandardCharsets.UTF_8));
+            byte[] knownDigest = HexFormat.of().parseHex(DEFAULT_LOCAL_PASSWORD_SHA_256);
+            return MessageDigest.isEqual(digest, knownDigest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 non disponibile per la validazione del bootstrap.", exception);
+        }
     }
 }

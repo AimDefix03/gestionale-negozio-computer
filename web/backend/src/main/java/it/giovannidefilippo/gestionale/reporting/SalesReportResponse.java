@@ -2,11 +2,11 @@ package it.giovannidefilippo.gestionale.reporting;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record SalesReportResponse(
-        LocalDateTime generatedAt,
+        OffsetDateTime generatedAt,
         LocalDate from,
         LocalDate to,
         String status,
@@ -23,7 +23,7 @@ public record SalesReportResponse(
 ) {
     public record SalesOrderRow(
             String code,
-            LocalDateTime timestamp,
+            OffsetDateTime timestamp,
             String customer,
             String status,
             String statusLabel,

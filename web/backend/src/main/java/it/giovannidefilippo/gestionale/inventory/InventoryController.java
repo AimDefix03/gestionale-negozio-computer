@@ -1,6 +1,7 @@
 package it.giovannidefilippo.gestionale.inventory;
 
 import it.giovannidefilippo.gestionale.common.PageResponse;
+import it.giovannidefilippo.gestionale.common.ResourceConflictException;
 import it.giovannidefilippo.gestionale.idempotency.IdempotencyService;
 import it.giovannidefilippo.gestionale.product.ProductResponse;
 import it.giovannidefilippo.gestionale.user.AuthSessionService;
@@ -54,6 +55,34 @@ class InventoryController {
     ) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
         return idempotencyService.execute(idempotencyKey, actor, "POST /api/inventory/movements", request, StockMovementResponse.class, HttpStatus.CREATED, () -> service.register(request, actor));
+    }
+
+    @PostMapping("/initial-balance")
+    @ResponseStatus(HttpStatus.CREATED)
+    StockMovementResponse initialBalance(
+            @Valid @RequestBody InitialStockRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = IdempotencyService.HEADER_NAME, required = false) String idempotencyKey
+    ) {
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
+        return idempotencyService.execute(idempotencyKey, actor, "POST /api/inventory/initial-balance", request, StockMovementResponse.class, HttpStatus.CREATED, () -> service.initialBalance(request, actor));
+    }
+
+    @PostMapping("/adjustments")
+    @ResponseStatus(HttpStatus.CREATED)
+    StockMovementResponse adjust(
+            @Valid @RequestBody InventoryAdjustmentRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = IdempotencyService.HEADER_NAME, required = false) String idempotencyKey
+    ) {
+        authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
+        throw new ResourceConflictException("Le rettifiche inventariali devono essere originate da una sessione di conteggio approvata.");
+    }
+
+    @GetMapping("/reconciliation")
+    InventoryReconciliationReport reconciliation(@RequestHeader(value = "X-Session-Token", required = false) String token) {
+        authSessionService.requirePermission(token, UserPermission.MANAGE_INVENTORY);
+        return service.reconciliation();
     }
 
     @GetMapping("/low-stock")

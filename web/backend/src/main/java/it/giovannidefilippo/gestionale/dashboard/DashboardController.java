@@ -2,6 +2,7 @@ package it.giovannidefilippo.gestionale.dashboard;
 
 import it.giovannidefilippo.gestionale.user.AuthSessionService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
+import it.giovannidefilippo.gestionale.user.UserPermission;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,7 +21,7 @@ class DashboardController {
 
     @GetMapping
     DashboardResponse summary(@RequestHeader(value = "X-Session-Token", required = false) String token) {
-        AuthenticatedUser actor = authSessionService.require(token);
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.VIEW_REPORTS);
         return dashboardService.summary(actor);
     }
 }

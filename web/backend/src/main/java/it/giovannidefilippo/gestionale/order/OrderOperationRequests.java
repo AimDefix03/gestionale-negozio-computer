@@ -22,6 +22,19 @@ public final class OrderOperationRequests {
     ) {
     }
 
+    public record PaymentReconciliationRequest(
+            @NotNull @DecimalMin("0.00") BigDecimal verifiedPaidAmount,
+            @Size(max = 120) String reference,
+            @NotBlank @Size(max = 500) String reason
+    ) {
+    }
+
+    public record CancellationRequest(
+            @Size(max = 120) String reference,
+            @NotBlank @Size(max = 500) String reason
+    ) {
+    }
+
     public record ReturnRequest(
             @NotBlank @Size(max = 500) String reason,
             @NotEmpty List<@Valid ReturnItemRequest> items

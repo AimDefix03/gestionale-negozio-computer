@@ -22,7 +22,7 @@ type HarnessProps = {
 
 function AuthHarness({
   initialMode = 'login',
-  initialForm = { username: '', password: '', role: 'SUPER_ADMIN' },
+  initialForm = { username: '', password: '' },
   message = '',
   onSubmit = (event) => event.preventDefault()
 }: HarnessProps) {
@@ -58,33 +58,33 @@ describe('AuthPage', () => {
 
     expect(evaluatePasswordMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/Password: /)).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Super admin' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Admin' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Ruolo')).not.toBeInTheDocument();
   });
 
-  it('limita la registrazione ai ruoli pubblici e mostra la robustezza', async () => {
+  it('presenta la registrazione come profilo cliente senza scelta del ruolo', async () => {
     vi.useFakeTimers();
     evaluatePasswordMock.mockResolvedValue({ strength: 'STRONG', label: 'Forte', suggestions: [] });
-    render(<AuthHarness initialMode="register" initialForm={{ username: 'mario', password: 'SecurePassword123!', role: 'EMPLOYEE' }} />);
+    render(<AuthHarness initialMode="register" initialForm={{ username: 'mario', password: 'SecurePassword123!' }} />);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
     });
 
     expect(screen.getByText('Password: Forte')).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Super admin' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Admin' })).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Dipendente' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Cliente' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Crea il tuo profilo cliente' })).toBeInTheDocument();
+    expect(screen.getByText('La registrazione pubblica crea esclusivamente un account cliente.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Ruolo')).not.toBeInTheDocument();
   });
 
-  it('normalizza il ruolo quando si passa alla registrazione', async () => {
+  it('non delega mai al browser la scelta del ruolo', async () => {
     const user = userEvent.setup();
     render(<AuthHarness />);
 
+    expect(screen.queryByLabelText('Ruolo')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Registrazione' }));
-
-    expect(screen.getByLabelText('Ruolo')).toHaveValue('EMPLOYEE');
+    expect(screen.queryByLabelText('Ruolo')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Login' }));
+    expect(screen.queryByLabelText('Ruolo')).not.toBeInTheDocument();
   });
 
   it('permette di mostrare e nascondere la password', async () => {

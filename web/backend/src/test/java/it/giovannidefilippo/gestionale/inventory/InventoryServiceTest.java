@@ -4,6 +4,8 @@ import it.giovannidefilippo.gestionale.product.ProductCategory;
 import it.giovannidefilippo.gestionale.product.ProductRequest;
 import it.giovannidefilippo.gestionale.product.ProductResponse;
 import it.giovannidefilippo.gestionale.product.ProductService;
+import it.giovannidefilippo.gestionale.common.PostgreSqlIntegrationTestSupport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
-class InventoryServiceTest {
+@Tag("postgresql")
+class InventoryServiceTest extends PostgreSqlIntegrationTestSupport {
     @Autowired
     private ProductService productService;
 
@@ -28,19 +31,22 @@ class InventoryServiceTest {
     @Test
     void registerMovementAdjustsStockAndKeepsMovementSnapshot() {
         String code = "MOV-" + UUID.randomUUID().toString().substring(0, 8);
-        productService.create(request(code, 4));
+        createProductWithStock(code, 4);
 
         StockMovementResponse response = inventoryService.register(code, StockMovementType.UNLOAD, 2, "Vendita banco", "admin", "Admin");
 
         assertThat(response.previousQuantity()).isEqualTo(4);
         assertThat(response.newQuantity()).isEqualTo(2);
+        assertThat(response.deltaQuantity()).isEqualTo(-2);
+        assertThat(response.origin()).isEqualTo(StockMovementOrigin.MANUAL_MOVEMENT);
+        assertThat(response.authoritative()).isTrue();
         assertThat(productService.findByCode(code).quantity()).isEqualTo(2);
     }
 
     @Test
     void registerMovementRejectsUnloadOverAvailableStock() {
         String code = "MOV-" + UUID.randomUUID().toString().substring(0, 8);
-        productService.create(request(code, 1));
+        createProductWithStock(code, 1);
 
         assertThatThrownBy(() -> inventoryService.register(code, StockMovementType.UNLOAD, 2, "Scarico non valido", "admin", "Admin"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -51,7 +57,7 @@ class InventoryServiceTest {
     @Test
     void registerMovementCannotConsumeReservedStock() {
         String code = "MOV-" + UUID.randomUUID().toString().substring(0, 8);
-        productService.create(request(code, 4));
+        createProductWithStock(code, 4);
         productService.reserveStock(code, 3);
 
         assertThatThrownBy(() -> inventoryService.register(code, StockMovementType.UNLOAD, 2, "Scarico con stock riservato", "admin", "Admin"))
@@ -69,10 +75,10 @@ class InventoryServiceTest {
         String reservedLowCode = "LWR-" + UUID.randomUUID().toString().substring(0, 8);
         String outCode = "OUT-" + UUID.randomUUID().toString().substring(0, 8);
         String availableCode = "AVL-" + UUID.randomUUID().toString().substring(0, 8);
-        productService.create(request(lowCode, 2));
-        productService.create(request(reservedLowCode, 5));
-        productService.create(request(outCode, 0));
-        productService.create(request(availableCode, 6));
+        createProductWithStock(lowCode, 2);
+        createProductWithStock(reservedLowCode, 5);
+        createProductWithStock(outCode, 0);
+        createProductWithStock(availableCode, 6);
         productService.reserveStock(reservedLowCode, 3);
 
         List<String> codes = inventoryService.lowStockProducts().stream()
@@ -84,7 +90,43 @@ class InventoryServiceTest {
         assertThat(productService.countLowStockProducts(InventoryService.LOW_STOCK_THRESHOLD)).isGreaterThanOrEqualTo(2);
     }
 
-    private ProductRequest request(String code, int quantity) {
+    @Test
+    void directAdjustmentsAreRejectedToPreserveTheApprovalWorkflow() {
+        String code = "LED-" + UUID.randomUUID().toString().substring(0, 8);
+        createProductWithStock(code, 7);
+
+        assertThatThrownBy(() -> inventoryService.adjust(code, 1, "Rettifica diretta", "admin", "Admin"))
+                .isInstanceOf(it.giovannidefilippo.gestionale.common.ResourceConflictException.class)
+                .hasMessageContaining("sessione di conteggio approvata");
+        assertThat(productService.findByCode(code).quantity()).isEqualTo(7);
+    }
+
+    @Test
+    void initialBalanceCanBeRegisteredOnlyOnce() {
+        String code = "BASE-" + UUID.randomUUID().toString().substring(0, 8);
+        createProductWithStock(code, 2);
+
+        assertThatThrownBy(() -> inventoryService.initialBalance(code, 4, "Secondo saldo", "admin", "Admin"))
+                .isInstanceOf(it.giovannidefilippo.gestionale.common.ResourceConflictException.class)
+                .hasMessageContaining("già stato registrato");
+        assertThat(productService.findByCode(code).quantity()).isEqualTo(2);
+    }
+
+    @Test
+    void directAdjustmentsAreRejectedEvenWithoutAnInitialBalance() {
+        String code = "NOBASE-" + UUID.randomUUID().toString().substring(0, 8);
+        productService.create(request(code));
+
+        assertThatThrownBy(() -> inventoryService.adjust(code, 1, "Rettifica prematura", "admin", "Admin"))
+                .isInstanceOf(it.giovannidefilippo.gestionale.common.ResourceConflictException.class)
+                .hasMessageContaining("sessione di conteggio approvata");
+    }
+
+    private void createProductWithStock(String code, int quantity) {
+        InventoryTestSupport.createProductWithStock(productService, inventoryService, request(code), quantity);
+    }
+
+    private ProductRequest request(String code) {
         return new ProductRequest(
                 code,
                 "Prodotto magazzino",
@@ -93,7 +135,6 @@ class InventoryServiceTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                quantity,
                 new BigDecimal("100.00"),
                 new BigDecimal("0.00")
         );

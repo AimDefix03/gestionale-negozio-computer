@@ -57,6 +57,10 @@ Prometheus raccoglie le metriche ogni 15 secondi. Oltre alle metriche standard J
 | `gestionale_authentication_attempts_total` | `outcome` | Login riusciti, credenziali non valide e account bloccati |
 | `gestionale_session_events_total` | `outcome` | Rinnovi riusciti o falliti e logout |
 | `gestionale_api_errors_total` | `status`, `code` | Errori API gestiti e prodotti dalla security chain |
+| `gestionale_financial_reconciliation_mismatches` | `type` | Anomalie finanziarie correnti per classificazione finita |
+| `gestionale_financial_reconciliation_detected_total` | nessuno | Anomalie rilevate nell'ultima esecuzione completata |
+| `gestionale_financial_reconciliation_last_success_epoch_seconds` | nessuno | Timestamp Unix dell'ultimo controllo completato |
+| `gestionale_financial_reconciliation_runs_total` | `outcome` | Controlli di riconciliazione riusciti o falliti |
 
 I tag sono enumerati e a cardinalita limitata. Non aggiungere username, token, request ID, URL dinamiche o dati cliente alle metriche.
 
@@ -103,6 +107,14 @@ Le soglie sono una baseline. Prima del rilascio vanno calibrate con carico e tra
 1. Verificare andamento, non il solo valore istantaneo.
 2. Controllare latenza HTTP, query lente e numero di istanze.
 3. Acquisire diagnostica prima di un riavvio, se il servizio e ancora raggiungibile.
+
+### Anomalie finanziarie
+
+1. Verificare `gestionale_financial_reconciliation_mismatches` per classificare il problema.
+2. Aprire `GET /api/financial-reconciliation` con un account autorizzato e conservare il report.
+3. Sospendere le operazioni sull'ordine coinvolto e applicare la procedura in `PAYMENT_RECONCILIATION.md`.
+4. Non aggiornare o cancellare direttamente i movimenti del ledger.
+5. Chiudere l'incidente soltanto quando il report torna coerente e l'evidenza della correzione e archiviata.
 
 ## Verifiche
 

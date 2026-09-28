@@ -28,6 +28,8 @@ Non certifica idoneita a produzione reale, conformita fiscale, legale o GDPR.
 - Profilo `prod` con `ddl-auto: validate`.
 - H2 console disabilitata.
 - Bootstrap super admin disabilitato dopo il primo avvio.
+- Nessun profilo predefinito; profilo ambiente selezionato esplicitamente.
+- JAR verificato fail-closed senza configurazione e in `prod` senza segreti.
 - Password locali di default non usate in ambienti condivisi.
 - Errori API nel formato standard.
 - Endpoint critici coperti da audit, permessi e idempotenza dove previsto.
@@ -71,8 +73,12 @@ Non certifica idoneita a produzione reale, conformita fiscale, legale o GDPR.
 - Restore sintetico verificato con `scripts/db/verify-backup-restore.sh`.
 - Ultimo restore drill reale completato con versione Flyway allineata e durata registrata.
 - Retention, storage off-site, cifratura e alert configurati per l'ambiente.
-- Utente database applicativo non superuser.
-- Password database non condivisa nel repository.
+- Owner database `NOLOGIN` e separato dalle identita operative.
+- Runtime applicativo non superuser e privo di `CREATE`, `ALTER`, `DROP` e ownership.
+- Flyway usa il migrator dedicato; backup e restore non condividono le credenziali runtime.
+- `scripts/db/verify-database-least-privilege.sh` completato con successo.
+- Porta PostgreSQL non esposta pubblicamente; loopback ammesso soltanto per diagnostica controllata.
+- Password database separate e non condivise nel repository.
 - Migrazioni applicate nell'ordine corretto.
 - Migrazione `V17` applicata e vincoli sui progressivi documentali verificati.
 
@@ -87,6 +93,7 @@ Non certifica idoneita a produzione reale, conformita fiscale, legale o GDPR.
 - Procedura di rotazione e rollback provata nell'ambiente di staging.
 - Security workflow completata senza vulnerabilita bloccanti.
 - Dependency review GitHub superata sulle pull request con modifiche alle dipendenze.
+- OWASP Dependency-Check backend completato senza vulnerabilita con CVSS almeno 7.
 - Nessuna credenziale demo o segreto reale introdotto nel frontend o nei template.
 - Super admin iniziale creato con password forte.
 - Sessioni e tentativi login persistiti.

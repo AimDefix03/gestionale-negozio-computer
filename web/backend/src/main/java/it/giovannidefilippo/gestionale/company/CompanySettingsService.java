@@ -4,6 +4,7 @@ import it.giovannidefilippo.gestionale.audit.AuditCategory;
 import it.giovannidefilippo.gestionale.audit.AuditService;
 import it.giovannidefilippo.gestionale.audit.AuditSeverity;
 import it.giovannidefilippo.gestionale.common.ResourceConflictException;
+import it.giovannidefilippo.gestionale.common.BusinessTime;
 import it.giovannidefilippo.gestionale.common.TimeProvider;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import org.springframework.stereotype.Service;
@@ -36,7 +37,11 @@ public class CompanySettingsService {
             throw new ResourceConflictException("La configurazione aziendale e stata modificata da un'altra sessione. Ricarica i dati e riprova.");
         }
         validate(request);
-        int fiscalYear = timeProvider.localDateTime().getYear();
+        boolean timeZoneChanged = !settings.getTimeZone().equals(request.timeZone().trim());
+        if (timeZoneChanged && documentNumberingUsage.existsAny()) {
+            throw new ResourceConflictException("Il fuso orario aziendale non puo cambiare dopo l'emissione del primo documento.");
+        }
+        int fiscalYear = BusinessTime.yearAt(timeProvider.instant(), request.timeZone());
         boolean numberingChanged = !settings.getInvoicePrefix().equalsIgnoreCase(request.invoicePrefix())
                 || !settings.getCreditNotePrefix().equalsIgnoreCase(request.creditNotePrefix())
                 || settings.getNumberPadding() != request.numberPadding();
@@ -51,7 +56,9 @@ public class CompanySettingsService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public CompanySettingsSnapshot lockForDocumentNumbering() {
-        return requireCurrentForUpdate().snapshot();
+        CompanySettingsSnapshot snapshot = requireCurrentForUpdate().snapshot();
+        snapshot.requireDocumentReady();
+        return snapshot;
     }
 
     private CompanySettings requireCurrent() {
@@ -65,6 +72,7 @@ public class CompanySettingsService {
     }
 
     private static void validate(CompanySettingsRequests.UpdateRequest request) {
+        BusinessTime.requireZoneId(request.timeZone());
         String invoicePrefix = request.invoicePrefix().trim();
         String creditPrefix = request.creditNotePrefix().trim();
         if (invoicePrefix.equalsIgnoreCase(creditPrefix)) {

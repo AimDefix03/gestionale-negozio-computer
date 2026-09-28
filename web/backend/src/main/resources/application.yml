@@ -4,8 +4,6 @@ server:
 spring:
   application:
     name: gestionale-api
-  profiles:
-    default: dev
   jpa:
     hibernate:
       ddl-auto: validate
@@ -37,6 +35,13 @@ logging:
     level: "%5p [requestId:%X{requestId:-}]"
 
 gestionale:
+  idempotency:
+    lease-seconds: 300
+    retention-hours: 24
+    wait-timeout-ms: 5000
+    poll-interval-ms: 25
+    cleanup-delay-ms: 900000
+    cleanup-initial-delay-ms: 900000
   security:
     session-duration-minutes: 45
     session-idle-timeout-minutes: 30

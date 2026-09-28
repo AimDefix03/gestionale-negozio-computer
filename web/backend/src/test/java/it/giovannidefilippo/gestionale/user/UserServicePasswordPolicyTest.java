@@ -18,7 +18,7 @@ class UserServicePasswordPolicyTest {
 
     @Test
     void publicRegistrationRejectsEmptyPassword() {
-        assertThatThrownBy(() -> userService.registerPublic(uniqueUsername("empty"), "", UserRole.CUSTOMER))
+        assertThatThrownBy(() -> userService.registerPublic(uniqueUsername("empty"), ""))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("password non rispetta la policy")
                 .hasMessageContaining("almeno 8 caratteri");
@@ -26,14 +26,14 @@ class UserServicePasswordPolicyTest {
 
     @Test
     void publicRegistrationRejectsShortPassword() {
-        assertThatThrownBy(() -> userService.registerPublic(uniqueUsername("short"), "A1!a", UserRole.CUSTOMER))
+        assertThatThrownBy(() -> userService.registerPublic(uniqueUsername("short"), "A1!a"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("almeno 8 caratteri");
     }
 
     @Test
     void publicRegistrationRejectsWeakPassword() {
-        assertThatThrownBy(() -> userService.registerPublic(uniqueUsername("weak"), "password", UserRole.CUSTOMER))
+        assertThatThrownBy(() -> userService.registerPublic(uniqueUsername("weak"), "password"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("lettera maiuscola")
                 .hasMessageContaining("numero")
@@ -44,14 +44,14 @@ class UserServicePasswordPolicyTest {
     void publicRegistrationRejectsPasswordSimilarToUsername() {
         String username = uniqueUsername("giovanni");
 
-        assertThatThrownBy(() -> userService.registerPublic(username, username + "A1!", UserRole.CUSTOMER))
+        assertThatThrownBy(() -> userService.registerPublic(username, username + "A1!"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("troppo simile allo username");
     }
 
     @Test
     void publicRegistrationAcceptsValidPassword() {
-        UserResponse response = userService.registerPublic(uniqueUsername("valid"), "Secure123!", UserRole.CUSTOMER);
+        UserResponse response = userService.registerPublic(uniqueUsername("valid"), "Secure123!");
 
         assertThat(response.role()).isEqualTo(UserRole.CUSTOMER);
     }

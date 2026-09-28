@@ -1,11 +1,14 @@
-import { Product, UserRole } from '../api';
+import { SellableProduct, UserRole } from '../api';
 
-export type View = 'dashboard' | 'catalog' | 'partners' | 'inventory' | 'orders' | 'documents' | 'reports' | 'accounts' | 'company' | 'audit' | 'monitoring';
+export type View = 'dashboard' | 'catalog' | 'sales' | 'partners' | 'inventory' | 'orders' | 'purchases' | 'documents' | 'reports' | 'accounts' | 'company' | 'audit' | 'monitoring';
 
 export type CartItem = {
-  product: Product;
+  product: SellableProduct;
   quantity: number;
+  maximumQuantity?: number;
 };
+
+export type SalesCustomerMode = 'REGISTERED' | 'WALK_IN';
 
 export type MenuItem = {
   label: string;
@@ -26,12 +29,11 @@ export type AuthMode = 'login' | 'register';
 export type AuthFormState = {
   username: string;
   password: string;
-  role: UserRole;
 };
 
 export type MovementFormState = {
   productCode: string;
-  type: 'LOAD' | 'UNLOAD';
+  operation: 'INITIAL_BALANCE' | 'LOAD' | 'UNLOAD';
   quantity: string;
   reason: string;
 };
@@ -44,9 +46,25 @@ export type AccountFormState = {
 
 export type DashboardStats = {
   products: number;
-  inventoryValue: number;
+  potentialRetailStockValue: number;
+  knownInventoryCostValue: number;
+  potentialGrossMarginOnCostedStock: number;
+  costedUnits: number;
+  uncostedUnits: number;
+  costCoveragePercentage: number;
   lowStock: number;
   outOfStock: number;
-  orders: number;
-  revenue: number;
+  orders: {
+    totalOrders: number;
+    draftOrders: number;
+    confirmedOrders: number;
+    fulfilledOrders: number;
+    canceledOrders: number;
+    draftOrderValue: number;
+    confirmedOrderValue: number;
+    fulfilledOrderValue: number;
+    grossCollected: number;
+    refunded: number;
+    netCollected: number;
+  };
 };

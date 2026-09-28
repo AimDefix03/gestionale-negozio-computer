@@ -29,7 +29,7 @@ Lo script `scripts/ci/run-prod-like-verification.sh` esegue:
 6. controllo dei secret montati, utenti non-root, filesystem read-only e privilegi minimi;
 7. CSP, header browser, cache e rate limiting del login;
 8. raccolta metriche, log JSON, regole alert e hardening Prometheus;
-9. typecheck e smoke test Playwright sul flusso applicativo reale;
+9. typecheck e matrice Playwright/axe sui workflow verticali MVP, autorizzazioni, rinnovo sessione, tastiera, accessibilita, bozze e download;
 10. lifecycle, scheduling, backup e restore PostgreSQL;
 11. acquisizione diagnostica;
 12. rimozione di container, reti, volumi e secret effimeri;
@@ -68,13 +68,16 @@ Le porte possono essere personalizzate con:
 
 Le sei porte devono essere numeriche e distinte. Il runner interrompe l'esecuzione prima di creare risorse Docker se rileva una collisione.
 
-Il nome progetto puo essere reso deterministico con `PRODLIKE_RUN_ID` oppure sostituito con `PRODLIKE_PROJECT_NAME`.
+La matrice browser comprende Chromium a 1440, 768 e 390 px, Firefox a 1440 px e WebKit a 1440 px. I 19 test usano selettori semantici: Chromium esegue anche i sette workflow verticali MVP, mentre Firefox e WebKit coprono autenticazione e accessibilita. La suite verifica l'assenza di violazioni axe critiche o serie e conserva trace, screenshot e video in caso di errore.
+
+Il nome progetto viene generato casualmente con prefisso `gestionale-prodlike-`. Puo essere reso riproducibile con `PRODLIKE_RUN_ID` oppure sostituito con `PRODLIKE_PROJECT_NAME`, ma deve conservare il prefisso previsto e non deve identificare un progetto gia esistente.
 
 ## Diagnostica
 
 Lo script salva sempre:
 
 - metadati dell'esecuzione;
+- inventario di container, volumi e reti associati al project/run ID;
 - stato dei servizi Compose;
 - log completi senza colori;
 - metadati delle immagini;
@@ -96,13 +99,22 @@ I file diagnostici non includono i valori delle password effimere. I log applica
 
 Il runner usa:
 
-- nomi container derivati dal progetto Compose isolato;
+- project name casuale con prefisso fisso e preflight che rifiuta ogni collisione;
+- label Compose del progetto e label run ID su ogni container, volume e rete;
 - database e utente dedicati;
 - password casuali montate come secret read-only;
 - porte distinte dagli smoke test E2E e dal restore drill;
-- trap di cleanup attivo su uscita normale, errore e interruzione.
+- trap di cleanup attivo su uscita normale, errore, `HUP`, `INT` e `TERM`.
 
-Il controllo `scripts/ci/verify-prod-like-cleanup.sh` fallisce se, dopo `docker compose down -v --remove-orphans`, rimangono container, volumi o reti con la label del progetto.
+Il runner non usa `docker compose down`. Prima di rimuovere qualsiasi risorsa inventaria l'intero progetto e verifica che ogni elemento abbia il run ID atteso; un'ownership mancante o diversa interrompe il cleanup senza cancellazioni. Il controllo `scripts/ci/verify-prod-like-cleanup.sh` e read-only e fallisce se rimangono container, volumi o reti del project/run ID.
+
+Un `SIGKILL` non puo essere intercettato e puo lasciare risorse temporanee. Recuperare project name e run ID dai metadati diagnostici, quindi eseguire:
+
+```bash
+scripts/ci/cleanup-docker-run.sh <project-name> <run-id>
+```
+
+Il comando accetta soltanto i prefissi dei runner, ripete le verifiche di ownership e rifiuta progetti misti o risorse non etichettate. Non sostituirlo con `down -v`.
 
 ## Gestione dei fallimenti
 
@@ -111,7 +123,7 @@ In caso di errore:
 1. aprire l'artefatto diagnostico;
 2. controllare `compose-ps.txt` e `compose.log`;
 3. verificare `playwright-report` e `test-results` per errori browser;
-4. leggere `cleanup.log` per distinguere un errore applicativo da un residuo infrastrutturale;
+4. leggere `cleanup.log` e l'inventario per distinguere un errore applicativo da un residuo infrastrutturale;
 5. riprodurre localmente con lo stesso commit;
 6. non rilanciare o ignorare il quality gate senza una causa identificata.
 

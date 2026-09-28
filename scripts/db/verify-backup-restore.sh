@@ -6,19 +6,37 @@ PROJECT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 timestamp=$(date +"%Y%m%d%H%M%S")
 project_name="gestionale-backup-verify-$timestamp"
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/gestionale-backup-verify.XXXXXX")
-secret_file="$work_dir/database-password"
-printf '%s' "$(openssl rand -hex 32)" > "$secret_file"
-chmod 0444 "$secret_file"
+for identity in bootstrap migrator runtime backup restore; do
+  printf '%s' "$(openssl rand -hex 32)" > "$work_dir/database-$identity-password"
+done
+chmod 0444 "$work_dir"/database-*-password
 
 export SKIP_ENV_FILE=true
 export COMPOSE_PROJECT_NAME="$project_name"
 export COMPOSE_FILE="$PROJECT_ROOT/docker-compose.prod-like.yml"
 export COMPOSE_OVERRIDE_FILE="$PROJECT_ROOT/docker-compose.secrets.yml"
 export POSTGRES_DB="gestionale_verify"
-export GESTIONALE_DB_USERNAME="gestionale_verify_user"
-export GESTIONALE_DB_PASSWORD=
-export GESTIONALE_DB_PASSWORD_FILE=
-export GESTIONALE_DB_PASSWORD_SECRET_FILE="$secret_file"
+export GESTIONALE_DB_BOOTSTRAP_USERNAME="gestionale_verify_bootstrap"
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD=
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD_FILE=
+export GESTIONALE_DB_BOOTSTRAP_PASSWORD_SECRET_FILE="$work_dir/database-bootstrap-password"
+export GESTIONALE_DB_OWNER_USERNAME="gestionale_verify_owner"
+export GESTIONALE_DB_MIGRATOR_USERNAME="gestionale_verify_migrator"
+export GESTIONALE_DB_MIGRATOR_PASSWORD=
+export GESTIONALE_DB_MIGRATOR_PASSWORD_FILE=
+export GESTIONALE_DB_MIGRATOR_PASSWORD_SECRET_FILE="$work_dir/database-migrator-password"
+export GESTIONALE_DB_RUNTIME_USERNAME="gestionale_verify_runtime"
+export GESTIONALE_DB_RUNTIME_PASSWORD=
+export GESTIONALE_DB_RUNTIME_PASSWORD_FILE=
+export GESTIONALE_DB_RUNTIME_PASSWORD_SECRET_FILE="$work_dir/database-runtime-password"
+export GESTIONALE_DB_BACKUP_USERNAME="gestionale_verify_backup"
+export GESTIONALE_DB_BACKUP_PASSWORD=
+export GESTIONALE_DB_BACKUP_PASSWORD_FILE=
+export GESTIONALE_DB_BACKUP_PASSWORD_SECRET_FILE="$work_dir/database-backup-password"
+export GESTIONALE_DB_RESTORE_USERNAME="gestionale_verify_restore"
+export GESTIONALE_DB_RESTORE_PASSWORD=
+export GESTIONALE_DB_RESTORE_PASSWORD_FILE=
+export GESTIONALE_DB_RESTORE_PASSWORD_SECRET_FILE="$work_dir/database-restore-password"
 export GESTIONALE_POSTGRES_PORT=${BACKUP_VERIFY_POSTGRES_PORT:-55433}
 export GESTIONALE_BACKEND_PORT="18080"
 export GESTIONALE_FRONTEND_PORT="18081"
@@ -51,11 +69,16 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+compose build postgres >/dev/null
 compose up -d postgres >/dev/null
 wait_for_postgres
 drill_started=$(date +%s)
 
-compose exec -T postgres psql -U "$GESTIONALE_DB_USERNAME" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 <<SQL >/dev/null
+compose exec -T postgres sh -eu -c '
+  export PGPASSWORD=$(cat "$GESTIONALE_DB_MIGRATOR_PASSWORD_FILE")
+  export PGOPTIONS="-c role=$GESTIONALE_DB_OWNER_USERNAME"
+  exec psql -h 127.0.0.1 -U "$GESTIONALE_DB_MIGRATOR_USERNAME" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1
+' <<SQL >/dev/null
 create table backup_restore_probe (
   id integer primary key,
   payload text not null
@@ -79,14 +102,20 @@ SKIP_ENV_FILE=true BACKUP_MAX_AGE_HOURS="$BACKUP_MAX_AGE_HOURS" "$SCRIPT_DIR/che
 
 CONFIRM_RESTORE=yes SKIP_ENV_FILE=true RESTART_APP_SERVICES=false "$SCRIPT_DIR/restore.sh" "$backup_file" >/dev/null
 
-restored_value=$(compose exec -T postgres psql -U "$GESTIONALE_DB_USERNAME" -d "$POSTGRES_DB" -tA -c "select payload from backup_restore_probe where id = 1;")
+restored_value=$(compose exec -T postgres sh -eu -c '
+  export PGPASSWORD=$(cat "$GESTIONALE_DB_BACKUP_PASSWORD_FILE")
+  exec psql -h 127.0.0.1 -U "$GESTIONALE_DB_BACKUP_USERNAME" -d "$POSTGRES_DB" -tA -c "select payload from backup_restore_probe where id = 1;"
+')
 
 if [ "$restored_value" != "restore-ok-$timestamp" ]; then
   echo "Verifica restore fallita: valore atteso non trovato." >&2
   exit 1
 fi
 
-restored_table_count=$(compose exec -T postgres psql -U "$GESTIONALE_DB_USERNAME" -d "$POSTGRES_DB" -tA -c "select count(*) from information_schema.tables where table_schema = 'public';")
+restored_table_count=$(compose exec -T postgres sh -eu -c '
+  export PGPASSWORD=$(cat "$GESTIONALE_DB_BACKUP_PASSWORD_FILE")
+  exec psql -h 127.0.0.1 -U "$GESTIONALE_DB_BACKUP_USERNAME" -d "$POSTGRES_DB" -tA -c "select count(*) from information_schema.tables where table_schema = '\''public'\'';"
+')
 if [ "$restored_table_count" -lt 1 ]; then
   echo "Verifica restore fallita: nessuna tabella ripristinata." >&2
   exit 1

@@ -1,11 +1,14 @@
 package it.giovannidefilippo.gestionale.order;
 
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
 import it.giovannidefilippo.gestionale.product.ProductCategory;
 import it.giovannidefilippo.gestionale.product.ProductRequest;
 import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import jakarta.persistence.EntityManager;
+import it.giovannidefilippo.gestionale.common.PostgreSqlIntegrationTestSupport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -23,9 +26,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Transactional
-class OrderPaymentIntegrationTest {
+@Tag("postgresql")
+class OrderPaymentIntegrationTest extends PostgreSqlIntegrationTestSupport {
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private InventoryService inventoryService;
 
     @Autowired
     private OrderService orderService;
@@ -59,7 +66,7 @@ class OrderPaymentIntegrationTest {
     void cancelingDraftOrderCancelsItsPendingPayment() {
         OrderResponse draft = createOrder(PaymentMethod.CARD);
 
-        OrderResponse canceled = orderService.cancel(draft.code(), actor());
+        OrderResponse canceled = orderService.cancel(draft.code(), cancellation(), actor());
         entityManager.flush();
 
         assertThat(canceled.status()).isEqualTo(OrderStatus.CANCELED);
@@ -95,7 +102,48 @@ class OrderPaymentIntegrationTest {
     }
 
     @Test
-    void rejectsOverpaymentAndCancelAfterReceipt() {
+    void historicalPaymentRequiresExplicitReconciliationBeforeNewReceipts() {
+        OrderResponse draft = createOrder(PaymentMethod.CARD);
+        orderService.confirm(draft.code(), actor());
+        entityManager.flush();
+        entityManager.clear();
+        jdbcTemplate.update("update order_payments set status = 'UNRECONCILED' where order_id = ?", draft.id());
+
+        OrderResponse ambiguous = orderService.findByCode(draft.code(), actor());
+        assertThat(ambiguous.payment().reconciliationRequired()).isTrue();
+        assertThat(ambiguous.payment().paidAmount()).isNull();
+        assertThat(ambiguous.payment().outstandingAmount()).isNull();
+        assertThatThrownBy(() -> orderService.recordReceipt(
+                draft.code(),
+                new OrderOperationRequests.ReceiptRequest(new BigDecimal("10.00"), "POS-HISTORY", "Incasso non ammesso"),
+                actor()
+        )).isInstanceOf(IllegalStateException.class).hasMessageContaining("Riconcilia");
+
+        OrderResponse reconciled = orderService.reconcilePayment(
+                draft.code(),
+                new OrderOperationRequests.PaymentReconciliationRequest(new BigDecimal("40.00"), "ESTRATTO-001", "Saldo verificato su evidenza storica"),
+                actor()
+        );
+
+        assertThat(reconciled.payment().reconciliationRequired()).isFalse();
+        assertThat(reconciled.payment().status()).isEqualTo(PaymentStatus.PARTIALLY_PAID);
+        assertThat(reconciled.payment().paidAmount()).isEqualByComparingTo("40.00");
+        assertThat(reconciled.payment().outstandingAmount()).isEqualByComparingTo("60.00");
+        assertThat(reconciled.payment().reconciledBy()).isEqualTo("admin");
+        assertThat(reconciled.payment().reconciliationReference()).isEqualTo("ESTRATTO-001");
+        assertThat(reconciled.payment().reconciliationReason()).isEqualTo("Saldo verificato su evidenza storica");
+        assertThat(reconciled.payment().transactions()).singleElement()
+                .extracting(OrderResponse.PaymentTransactionResponse::type)
+                .isEqualTo(PaymentTransactionType.RECONCILIATION);
+        assertThatThrownBy(() -> orderService.reconcilePayment(
+                draft.code(),
+                new OrderOperationRequests.PaymentReconciliationRequest(BigDecimal.ZERO, "", "Seconda riconciliazione"),
+                actor()
+        )).isInstanceOf(IllegalStateException.class).hasMessageContaining("non richiede");
+    }
+
+    @Test
+    void rejectsOverpaymentAndReversesReceiptOnCancellation() {
         OrderResponse draft = createOrder(PaymentMethod.CARD);
         orderService.confirm(draft.code(), actor());
         orderService.recordReceipt(draft.code(), new OrderOperationRequests.ReceiptRequest(new BigDecimal("40.00"), "", "Acconto"), actor());
@@ -103,9 +151,17 @@ class OrderPaymentIntegrationTest {
         assertThatThrownBy(() -> orderService.recordReceipt(draft.code(), new OrderOperationRequests.ReceiptRequest(new BigDecimal("61.00"), "", "Importo eccedente"), actor()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("supera il saldo residuo");
-        assertThatThrownBy(() -> orderService.cancel(draft.code(), actor()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("solo un pagamento in attesa");
+        OrderResponse canceled = orderService.cancel(
+                draft.code(),
+                new OrderOperationRequests.CancellationRequest("STORNO-ACCONTO", "Ordine duplicato"),
+                actor()
+        );
+
+        assertThat(canceled.status()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(canceled.payment().status()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(canceled.payment().netPaidAmount()).isZero();
+        assertThat(canceled.payment().transactions()).extracting(OrderResponse.PaymentTransactionResponse::type)
+                .containsExactly(PaymentTransactionType.RECEIPT, PaymentTransactionType.REVERSAL);
     }
 
     @Test
@@ -162,6 +218,81 @@ class OrderPaymentIntegrationTest {
                 .hasMessageContaining("reso ricevuto");
     }
 
+    @Test
+    void supportsMultipleProductsAcrossTwoReturnsWithCumulativeQuantitiesAndIsolatedRefundLedgers() {
+        OrderResponse draft = createMultiLineOrder();
+        orderService.confirm(draft.code(), actor());
+        orderService.recordReceipt(draft.code(), new OrderOperationRequests.ReceiptRequest(new BigDecimal("350.00"), "TRN-MULTI", "Saldo ordine multi-riga"), actor());
+        OrderResponse fulfilled = orderService.fulfill(draft.code(), actor());
+
+        OrderResponse firstRequested = orderService.requestReturn(
+                draft.code(),
+                new OrderOperationRequests.ReturnRequest("Primo reso", List.of(
+                        new OrderOperationRequests.ReturnItemRequest(productCode(fulfilled, "GPU"), 1),
+                        new OrderOperationRequests.ReturnItemRequest(productCode(fulfilled, "CPU"), 2)
+                )),
+                actor()
+        );
+        OrderResponse.OrderReturnResponse firstReturn = firstRequested.returns().get(0);
+        assertThat(firstReturn.id()).isNotNull();
+        assertThat(item(firstRequested, "GPU").returnedOrReservedQuantity()).isEqualTo(1);
+        assertThat(item(firstRequested, "GPU").returnableQuantity()).isEqualTo(1);
+        assertThat(item(firstRequested, "CPU").returnedOrReservedQuantity()).isEqualTo(2);
+        assertThat(item(firstRequested, "CPU").returnableQuantity()).isEqualTo(1);
+
+        orderService.approveReturn(draft.code(), firstReturn.code(), new OrderOperationRequests.ReturnReviewRequest("Primo reso approvato"), actor());
+        orderService.receiveReturn(draft.code(), firstReturn.code(), actor());
+        OrderResponse firstRefunded = orderService.refundReturn(
+                draft.code(),
+                firstReturn.code(),
+                new OrderOperationRequests.ReturnRefundRequest(new BigDecimal("50.00"), "REF-FIRST", "Rimborso parziale primo reso"),
+                actor()
+        );
+        OrderResponse.OrderReturnResponse firstAfterRefund = returnByCode(firstRefunded, firstReturn.code());
+        assertThat(firstAfterRefund.status()).isEqualTo(OrderReturnStatus.PARTIALLY_REFUNDED);
+        assertThat(firstAfterRefund.refundTransactions()).singleElement()
+                .satisfies(transaction -> {
+                    assertThat(transaction.reference()).isEqualTo("REF-FIRST");
+                    assertThat(transaction.returnId()).isEqualTo(firstReturn.id());
+                });
+
+        OrderResponse secondRequested = orderService.requestReturn(
+                draft.code(),
+                new OrderOperationRequests.ReturnRequest("Secondo reso", List.of(
+                        new OrderOperationRequests.ReturnItemRequest(productCode(fulfilled, "GPU"), 1),
+                        new OrderOperationRequests.ReturnItemRequest(productCode(fulfilled, "CPU"), 1)
+                )),
+                actor()
+        );
+        OrderResponse.OrderReturnResponse secondReturn = secondRequested.returns().stream()
+                .filter(orderReturn -> !orderReturn.code().equals(firstReturn.code()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(item(secondRequested, "GPU").returnedOrReservedQuantity()).isEqualTo(2);
+        assertThat(item(secondRequested, "GPU").returnableQuantity()).isZero();
+        assertThat(item(secondRequested, "CPU").returnedOrReservedQuantity()).isEqualTo(3);
+        assertThat(item(secondRequested, "CPU").returnableQuantity()).isZero();
+        assertThat(returnByCode(secondRequested, firstReturn.code()).refundTransactions()).hasSize(1);
+        assertThat(secondReturn.refundTransactions()).isEmpty();
+
+        orderService.approveReturn(draft.code(), secondReturn.code(), new OrderOperationRequests.ReturnReviewRequest("Secondo reso approvato"), actor());
+        orderService.receiveReturn(draft.code(), secondReturn.code(), actor());
+        OrderResponse secondRefunded = orderService.refundReturn(
+                draft.code(),
+                secondReturn.code(),
+                new OrderOperationRequests.ReturnRefundRequest(new BigDecimal("25.00"), "REF-SECOND", "Rimborso parziale secondo reso"),
+                actor()
+        );
+
+        assertThat(returnByCode(secondRefunded, firstReturn.code()).refundTransactions())
+                .extracting(OrderResponse.PaymentTransactionResponse::reference)
+                .containsExactly("REF-FIRST");
+        assertThat(returnByCode(secondRefunded, secondReturn.code()).refundTransactions())
+                .extracting(OrderResponse.PaymentTransactionResponse::reference)
+                .containsExactly("REF-SECOND");
+        assertThat(secondRefunded.payment().refundedAmount()).isEqualByComparingTo("75.00");
+    }
+
     private OrderResponse createOrder(PaymentMethod method) {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         String productCode = "PAY-" + suffix;
@@ -173,10 +304,10 @@ class OrderPaymentIntegrationTest {
                 "TestBrand",
                 "Componente di test",
                 "",
-                2,
                 new BigDecimal("100.00"),
                 BigDecimal.ZERO
         ));
+        inventoryService.initialBalance(productCode, 2, "Saldo iniziale pagamenti", "test", "Test");
         return orderService.create(
                 new OrderRequests.CreateOrderRequest(
                         "cliente_pagamento_" + suffix,
@@ -188,7 +319,68 @@ class OrderPaymentIntegrationTest {
         );
     }
 
+    private OrderResponse createMultiLineOrder() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String gpuCode = "GPU-" + suffix;
+        String cpuCode = "CPU-" + suffix;
+        createProduct(gpuCode, "Scheda video", new BigDecimal("100.00"), 2);
+        createProduct(cpuCode, "Processore", new BigDecimal("50.00"), 3);
+        return orderService.create(
+                new OrderRequests.CreateOrderRequest(
+                        "cliente_multi_" + suffix,
+                        PaymentMethod.BANK_TRANSFER,
+                        List.of(
+                                new OrderRequests.CreateOrderItemRequest(gpuCode, 2),
+                                new OrderRequests.CreateOrderItemRequest(cpuCode, 3)
+                        )
+                ),
+                "cliente_multi_" + suffix,
+                actor()
+        );
+    }
+
+    private void createProduct(String code, String name, BigDecimal price, int quantity) {
+        productService.create(new ProductRequest(
+                code,
+                name,
+                "Prodotto creato per verificare i resi multi-riga.",
+                ProductCategory.HARDWARE,
+                "TestBrand",
+                "Componente di test",
+                "",
+                price,
+                BigDecimal.ZERO
+        ));
+        inventoryService.initialBalance(code, quantity, "Saldo iniziale resi multi-riga", "test", "Test");
+    }
+
+    private static String productCode(OrderResponse order, String prefix) {
+        return order.items().stream()
+                .map(OrderResponse.OrderItemResponse::productCode)
+                .filter(code -> code.startsWith(prefix + "-"))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static OrderResponse.OrderItemResponse item(OrderResponse order, String prefix) {
+        return order.items().stream()
+                .filter(orderItem -> orderItem.productCode().startsWith(prefix + "-"))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static OrderResponse.OrderReturnResponse returnByCode(OrderResponse order, String returnCode) {
+        return order.returns().stream()
+                .filter(orderReturn -> orderReturn.code().equals(returnCode))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private static AuthenticatedUser actor() {
         return new AuthenticatedUser("admin", UserRole.SUPER_ADMIN);
+    }
+
+    private static OrderOperationRequests.CancellationRequest cancellation() {
+        return new OrderOperationRequests.CancellationRequest("", "Annullamento richiesto dal test");
     }
 }

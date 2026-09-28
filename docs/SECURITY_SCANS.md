@@ -47,15 +47,20 @@ npm run audit
 
 Il controllo fallisce su vulnerabilita almeno `high` rilevate da npm.
 
-### Backend dependency inventory
+### Backend dependency inventory e SCA
 
 Nel backend viene eseguito:
 
 ```bash
 mvn -B -DskipTests dependency:tree
+mvn -B dependency-check:check
 ```
 
-Questo non e un vulnerability scanner completo, ma garantisce che il grafo dipendenze Maven sia risolvibile in CI e aiuta a leggere rapidamente la superficie del backend.
+Il primo comando rende leggibile il grafo Maven. OWASP Dependency-Check analizza poi le dipendenze contro i feed CVE, fallisce in caso di errore dello scanner o vulnerabilita con CVSS almeno 7 e pubblica i report `target/dependency-check-report.html` e `target/dependency-check-report.json` per 14 giorni.
+
+Baseline locale verificata il 2026-08-04: 66 dipendenze analizzate, 0 dipendenze vulnerabili e 0 vulnerabilita nel report finale. Il primo passaggio ha bloccato versioni vulnerabili di Tomcat e pgJDBC; l'aggiornamento e stato seguito dalla suite completa e da una nuova scansione pulita.
+
+La CI genera inoltre il JAR e verifica che l'avvio senza configurazione e quello `prod` privo di segreti terminino fail-closed tramite `scripts/security/verify-backend-fail-closed.sh`.
 
 ### CodeQL
 
@@ -91,6 +96,7 @@ Gli aggiornamenti devono essere trattati come pull request normali: CI, security
 
 - Vulnerabilita frontend: blocco da severita `high`.
 - Dependency review: blocco da severita `high`.
+- Dipendenze backend: blocco da CVSS `7.0` e scanner fail-closed.
 - CodeQL: risultati pubblicati nella sezione Security di GitHub.
 - Gitleaks: workflow fallita in presenza di segreti rilevati nella storia o nel checkout.
 
@@ -98,7 +104,6 @@ Gli aggiornamenti devono essere trattati come pull request normali: CI, security
 
 Restano fuori da questo step:
 
-- OWASP Dependency-Check backend con database CVE locale o API NVD;
 - SCA professionale con policy licenze avanzate;
 - DAST contro ambiente avviato;
 - container image scanning;

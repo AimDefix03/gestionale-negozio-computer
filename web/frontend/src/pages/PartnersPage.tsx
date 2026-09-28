@@ -1,5 +1,5 @@
-import { FormEvent } from 'react';
-import { BusinessPartner, BusinessPartnerPayload, BusinessPartnerType, PageResponse, PartnerQuery } from '../api';
+import { FormEvent, useEffect, useState } from 'react';
+import { BusinessPartner, BusinessPartnerPayload, BusinessPartnerType, PageResponse, PartnerQuery, UserAccount } from '../api';
 import PaginationControls from '../components/PaginationControls';
 import DataList from '../components/common/DataList';
 
@@ -7,35 +7,53 @@ type Props = {
   page: PageResponse<BusinessPartner>;
   query: PartnerQuery;
   form: BusinessPartnerPayload;
+  formDirty: boolean;
   editingPartner: BusinessPartner | null;
+  customerAccounts: UserAccount[];
   canManage: boolean;
+  canLinkAccounts: boolean;
   busy: boolean;
   pageSize: number;
   onQueryChange: (query: PartnerQuery) => void;
   onFormChange: (form: BusinessPartnerPayload) => void;
   onEdit: (partner: BusinessPartner) => void;
   onDeactivate: (code: string) => void;
+  onLinkAccount: (code: string, accountId: number) => void;
+  onUnlinkAccount: (code: string) => void;
   onCancelEdit: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
-export default function PartnersPage({ page, query, form, editingPartner, canManage, busy, pageSize, onQueryChange, onFormChange, onEdit, onDeactivate, onCancelEdit, onSubmit }: Props) {
+export default function PartnersPage({ page, query, form, formDirty, editingPartner, customerAccounts, canManage, canLinkAccounts, busy, pageSize, onQueryChange, onFormChange, onEdit, onDeactivate, onLinkAccount, onUnlinkAccount, onCancelEdit, onSubmit }: Props) {
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+  const customerAccountById = new Map(customerAccounts.map((account) => [account.id, account]));
+
+  useEffect(() => {
+    setSelectedAccountId(editingPartner?.linkedAccountId ? String(editingPartner.linkedAccountId) : '');
+  }, [editingPartner]);
+
   return (
     <div className="content-grid two">
       <DataList
         title="Anagrafiche"
+        columns={['Codice', 'Nome', 'Tipo', 'Contatto', 'Citta', 'Account', 'Stato']}
         rows={page.content.map((partner) => [
           partner.code,
           partner.displayName,
           partner.typeLabel,
           partner.email || partner.phone || '-',
           partner.city || '-',
+          partner.type === 'CUSTOMER'
+            ? partner.linkedAccountId
+              ? `Account: ${customerAccountById.get(partner.linkedAccountId)?.username ?? `#${partner.linkedAccountId}`}`
+              : 'Account non collegato'
+            : '-',
           <span className={`status-badge ${partner.active ? 'ok' : 'out'}`}>{partner.active ? 'Attiva' : 'Disattivata'}</span>
         ])}
         actions={(code) => {
           const partner = page.content.find((item) => item.code === code);
           if (!partner || !canManage) return null;
-          return <div className="row-actions"><button className="link-button" onClick={() => onEdit(partner)}>Modifica</button>{partner.active && <button className="link-button danger-text" onClick={() => onDeactivate(partner.code)}>Disattiva</button>}</div>;
+          return <div className="row-actions"><button className="link-button" disabled={busy} onClick={() => onEdit(partner)}>Modifica</button>{partner.active && <button className="link-button danger-text" disabled={busy} onClick={() => onDeactivate(partner.code)}>Disattiva</button>}</div>;
         }}
         footer={<PaginationControls page={page} onPageChange={(nextPage) => onQueryChange({ ...query, page: nextPage })} />}
       >
@@ -60,7 +78,22 @@ export default function PartnersPage({ page, query, form, editingPartner, canMan
             <label>Indirizzo<input value={form.address} onChange={(event) => onFormChange({ ...form, address: event.target.value })} /></label>
             <label>Citta<input value={form.city} onChange={(event) => onFormChange({ ...form, city: event.target.value })} /></label>
             <label>Note<input value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} /></label>
-            <div className="form-actions"><button className="button secondary" type="button" onClick={onCancelEdit}>Annulla</button><button className="button primary" disabled={busy}>{editingPartner ? 'Salva modifiche' : 'Crea anagrafica'}</button></div>
+            {editingPartner?.type === 'CUSTOMER' && canLinkAccounts && (
+              <div className="account-link-panel">
+                <label>Account cliente
+                  <select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
+                    <option value="">Nessun account collegato</option>
+                    {customerAccounts.map((account) => <option key={account.id} value={account.id}>{account.username}</option>)}
+                  </select>
+                </label>
+                <div className="form-actions">
+                  {editingPartner.linkedAccountId && <button className="button secondary" type="button" disabled={busy} onClick={() => onUnlinkAccount(editingPartner.code)}>Scollega</button>}
+                  <button className="button secondary" type="button" disabled={busy || !selectedAccountId} onClick={() => onLinkAccount(editingPartner.code, Number(selectedAccountId))}>Collega account</button>
+                </div>
+                <p className="field-note">Il collegamento usa l'ID stabile dell'account e non il nome visualizzato.</p>
+              </div>
+            )}
+            <div className="form-actions">{formDirty && <span className="draft-status" role="status">Bozza salvata per questa sessione</span>}<button className="button secondary" type="button" onClick={onCancelEdit}>Annulla</button><button className="button primary" disabled={busy}>{editingPartner ? 'Salva modifiche' : 'Crea anagrafica'}</button></div>
           </form>
         ) : <div className="empty-state">Permessi insufficienti per modificare le anagrafiche.</div>}
       </section>

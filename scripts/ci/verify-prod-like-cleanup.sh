@@ -1,22 +1,24 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 1 ]; then
-  printf 'Uso: %s <compose-project-name>\n' "$0" >&2
+if [ "$#" -ne 2 ]; then
+  printf 'Uso: %s <compose-project-name> <run-id>\n' "$0" >&2
   exit 64
 fi
 
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 PROJECT_NAME=$1
+RUN_ID=$2
 ATTEMPT=1
 MAX_ATTEMPTS=5
 
-while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
-  CONTAINERS=$(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT_NAME")
-  VOLUMES=$(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT_NAME")
-  NETWORKS=$(docker network ls -q --filter "label=com.docker.compose.project=$PROJECT_NAME")
+. "$ROOT_DIR/scripts/ci/docker-run-safety.sh"
 
-  if [ -z "$CONTAINERS" ] && [ -z "$VOLUMES" ] && [ -z "$NETWORKS" ]; then
-    printf 'Cleanup Docker verificato per il progetto %s.\n' "$PROJECT_NAME"
+docker_run_validate_id "$RUN_ID"
+
+while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
+  if docker_run_assert_project_unused "$PROJECT_NAME"; then
+    printf 'Cleanup Docker verificato per il progetto %s (run %s).\n' "$PROJECT_NAME" "$RUN_ID"
     exit 0
   fi
 
@@ -24,8 +26,5 @@ while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
   sleep 1
 done
 
-printf 'Cleanup Docker incompleto per il progetto %s.\n' "$PROJECT_NAME" >&2
-[ -z "$CONTAINERS" ] || printf 'Container residui: %s\n' "$CONTAINERS" >&2
-[ -z "$VOLUMES" ] || printf 'Volumi residui: %s\n' "$VOLUMES" >&2
-[ -z "$NETWORKS" ] || printf 'Reti residue: %s\n' "$NETWORKS" >&2
+printf 'Cleanup Docker incompleto per il progetto %s (run %s).\n' "$PROJECT_NAME" "$RUN_ID" >&2
 exit 1

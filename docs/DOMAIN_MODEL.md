@@ -26,6 +26,7 @@ Permessi attuali:
 - `VIEW_CATALOG`
 - `MANAGE_PRODUCTS`
 - `MANAGE_INVENTORY`
+- `APPROVE_INVENTORY_COUNTS`
 - `VIEW_ORDERS`
 - `CREATE_ORDERS`
 - `CONFIRM_ORDERS`
@@ -51,7 +52,7 @@ Campi principali:
 - brand;
 - tipo prodotto;
 - utilizzo opzionale;
-- quantita;
+- quantita fisica come proiezione transazionale del ledger di magazzino;
 - quantita riservata;
 - disponibilita vendibile calcolata come quantita meno riservato;
 - prezzo;
@@ -62,24 +63,50 @@ Campi principali:
 Regole attuali:
 
 - codice, nome, descrizione, brand e tipo prodotto devono essere non vuoti anche a livello database;
+- l'API anagrafica non accetta quantita e crea ogni prodotto con giacenza zero;
+- saldo iniziale e variazioni fisiche sono consentiti soltanto tramite comandi del modulo inventario;
 - quantita, prezzo e sconto hanno vincoli database coerenti con le regole applicative;
 - il codice prodotto resta modificabile solo finche il prodotto non compare in ordini;
-- la cancellazione fisica e consentita solo per prodotti senza ordini collegati e senza stock riservato;
+- la cancellazione fisica e consentita solo per prodotti senza ordini collegati, stock riservato o giacenza fisica;
 - un prodotto con ordini o riserve va disattivato, non eliminato;
 - un prodotto disattivato non puo essere acquistato in nuovi ordini;
 - un prodotto disattivato resta consultabile nello storico e gli ordini gia confermati restano evadibili.
 
 ### StockMovement
 
-Rappresenta un movimento di magazzino con tipo `LOAD` o `UNLOAD`, quantita precedente e nuova quantita.
+Rappresenta il ledger autorevole delle variazioni fisiche di magazzino. Ogni record collega il prodotto tramite ID stabile, conserva gli snapshot descrittivi, una variazione firmata, la giacenza precedente e nuova, l'origine e lo stato di autorevolezza.
 
 Regole attuali:
 
-- quantita movimento, giacenza precedente e giacenza nuova sono protette da vincoli database;
+- ogni prodotto riceve un solo saldo iniziale autorevole prima di qualsiasi altra variazione;
+- i tipi autorevoli comprendono `INITIAL_BALANCE`, `LOAD`, `UNLOAD`, `FULFILLMENT`, `RETURN`, `PURCHASE_RECEIPT`, `PHYSICAL_INVENTORY_INCREASE` e `PHYSICAL_INVENTORY_DECREASE`;
+- l'origine distingue saldo manuale, rettifica, movimento manuale, evasione ordine, reso e baseline di migrazione;
+- la somma delle variazioni firmate autorevoli deve coincidere con la giacenza fisica proiettata sul prodotto;
+- variazione firmata, giacenza precedente e giacenza nuova sono protette da vincoli database;
 - lo scarico non puo portare la quantita sotto zero;
 - lo scarico manuale non puo consumare quantita gia riservate da ordini confermati;
-- ogni variazione passa da un'operazione centralizzata di aggiustamento stock;
+- ogni variazione fisica passa da un comando inventariale e produce il movimento nella stessa transazione;
 - aggiornamenti concorrenti sullo stesso prodotto vengono intercettati tramite optimistic locking.
+
+La migrazione `V24` classifica i movimenti precedenti come osservazioni legacy non autorevoli e crea una baseline di migrazione per ogni prodotto esistente. Queste baseline sono dichiarate non verificate: il report di riconciliazione le distingue dai saldi iniziali ricostruiti da evidenze operative.
+
+Il report di riconciliazione espone `BALANCED`, `MISSING_INITIAL_BALANCE`, `UNVERIFIED_INITIAL_BALANCE`, `CHAIN_BROKEN` e `LEDGER_DRIFT`. Non modifica automaticamente dati storici e non trasforma una baseline di migrazione in evidenza verificata.
+
+### PhysicalInventorySession e PhysicalInventoryItem
+
+Rappresentano un inventario fisico governato. La sessione conserva motivo, stato e attori; ogni riga conserva snapshot teorico, conteggio, differenza e risultato dell'approvazione.
+
+Regole attuali:
+
+- una sessione nasce `OPEN`, viene `SUBMITTED` soltanto quando tutte le righe sono contate e termina `APPROVED` o `CANCELED`;
+- un prodotto puo appartenere a una sola sessione attiva, anche quando il codice viene scritto con maiuscole diverse;
+- il conteggio fotografa giacenza, riservato e versione del prodotto senza bloccare vendite o ricezioni successive;
+- la differenza resta quella osservata al conteggio; in approvazione viene applicata alla giacenza corrente, compensando i movimenti avvenuti nel frattempo;
+- chi invia il conteggio non puo approvarlo; l'approvazione richiede `APPROVE_INVENTORY_COUNTS`;
+- una differenza non puo ridurre la giacenza sotto la quantita riservata;
+- ogni differenza non nulla approvata crea un solo movimento collegato a sessione e riga; una differenza zero conserva comunque l'evidenza di approvazione;
+- la rettifica diretta e disabilitata: le correzioni inventariali passano dal workflow conteggio, invio e approvazione;
+- cancellazione e approvazione chiudono le righe, rendendo nuovamente conteggiabile il prodotto in una sessione futura.
 
 ### CustomerOrder, OrderItem, OrderPayment, PaymentTransaction e OrderReturn
 
@@ -88,29 +115,46 @@ Rappresentano un ordine con righe prodotto, totale calcolato e un pagamento stru
 Regole attuali:
 
 - le righe ordine devono avere quantita positiva e importi non negativi;
+- ogni riga ordine conserva snapshot immutabili di codice, nome, descrizione e prezzo catalogo applicato al momento della creazione;
 - codice ordine, cliente, metodo pagamento snapshot e totale hanno vincoli database coerenti con il dominio;
 - il metodo pagamento non e piu una stringa libera: i nuovi ordini ammettono `CARD`, `BANK_TRANSFER` e `CASH`;
 - il pagamento conserva stato, importo richiesto, incassato, rimborsato, netto, residuo, valuta e timestamp;
 - alla creazione il pagamento nasce `PENDING`, con importo richiesto uguale al totale ordine e importo pagato pari a zero;
 - il vincolo univoco su `order_payments.order_id` garantisce un solo pagamento strutturato per ordine in questa fase;
 - i valori storici non riconosciuti vengono migrati come `OTHER` conservando il dettaglio originale, ma `OTHER` non e selezionabile per nuovi ordini;
-- l'ordine puo essere collegato a un cliente dell'anagrafica tramite `customerCode`;
-- se viene selezionato un cliente registrato, l'ordine conserva codice cliente e nome/ragione sociale come riferimento operativo;
+- `customerType` distingue `SELF_SERVICE`, `REGISTERED`, `WALK_IN` e lo storico `LEGACY_UNRESOLVED` privo di evidenza sufficiente;
+- una vendita assistita usa l'ID stabile dell'anagrafica per un cliente censito oppure un nominativo esplicito senza partner fittizio per un cliente occasionale;
+- se viene selezionato un cliente registrato, l'ordine conserva partner ID, codice cliente e nome/ragione sociale come riferimento operativo;
+- il cliente self-service non puo selezionare partner o identita diverse dal proprio account autenticato;
+- la migrazione `V30` non deduce il canale degli ordini storici: li classifica conservativamente come `LEGACY_UNRESOLVED`;
 - alla creazione l'ordine nasce in bozza e non scarica il magazzino;
 - la conferma ordine riserva lo stock e non modifica la giacenza fisica;
 - l'evasione scarica fisicamente il magazzino, libera la riserva e rende l'ordine pronto per la generazione della fattura simulata;
 - l'annullamento di una bozza non modifica lo stock;
 - l'annullamento di un ordine confermato libera lo stock riservato;
 - l'annullamento ordine porta a `CANCELED` un pagamento ancora pendente;
+- l'annullamento di un ordine con incasso netto richiede un riferimento contabile, crea un solo `REVERSAL` per l'intero netto e porta il pagamento a `REFUNDED`;
+- ordine, pagamento, reversal, rilascio delle riserve e audit appartengono alla stessa transazione e vengono ripristinati insieme in caso di errore;
+- causale, riferimento, timestamp, actor e ruolo dell'annullamento restano nello storico dell'ordine;
+- i pagamenti storici `UNRECONCILED` non sono annullabili finche una persona autorizzata non completa la riconciliazione;
 - evasione e pagamento restano stati distinti: l'evasione non dichiara automaticamente un incasso;
 - il codice ordine viene generato da sequenza database dedicata.
-- ogni incasso o rimborso genera un `PaymentTransaction` immutabile con codice, tipo, importo, causale, riferimento, operatore e timestamp;
+- ogni incasso, rimborso, reversal o riconciliazione genera un `PaymentTransaction` immutabile con codice, tipo, importo, causale, riferimento, operatore e timestamp;
+- il ledger `PaymentTransaction` e la fonte autorevole degli importi; i saldi di pagamento e reso sono proiezioni sincronizzate nella stessa transazione;
 - gli incassi possono essere parziali ma non possono superare il totale richiesto;
-- i rimborsi sono collegati a un reso ricevuto e non possono superare ne l'incassato netto ne il valore residuo del reso;
+- i rimborsi sono collegati tramite ID a un reso ricevuto e non possono superare ne l'incassato netto ne il valore residuo del reso;
+- un movimento `REFUND` richiede un reso, un `REVERSAL` richiede un ordine annullato e un `RECONCILIATION` identifica un solo pagamento riconciliato;
+- cronologia di pagamento, movimento e reso e protetta da vincoli database;
 - il reso segue `REQUESTED`, `APPROVED`, `RECEIVED`, eventuale `PARTIALLY_REFUNDED` e `REFUNDED`, oppure termina in `REJECTED`;
+- una richiesta di reso puo contenere piu righe dello stesso ordine e ogni quantita deve essere positiva;
+- per ogni riga ordine il backend calcola quantita gia restituita o impegnata e residuo restituibile considerando tutti i resi che riservano quantita;
+- la creazione del reso acquisisce un lock sull'ordine e rivalida il residuo nella transazione, impedendo che richieste concorrenti restituiscano due volte la stessa unita;
+- ogni reso ha un ID stabile usato per note, selezione operativa e associazione delle transazioni di rimborso; il codice rimane uno snapshot leggibile;
 - la ricezione del reso reintegra le quantita con un movimento magazzino dedicato e impedisce doppi resi sulla stessa quantita acquistata.
 
 Pagamenti parziali, incassi, rimborsi e resi sono attivi tramite transazioni applicative, permessi dedicati, audit e idempotenza.
+
+Il report finanziario confronta periodicamente le proiezioni con il ledger e segnala drift, stati, collegamenti o timestamp incompatibili. Il controllo e read-only: preserva le evidenze e richiede una correzione manuale revisionata quando rileva un'anomalia.
 
 ### CompanySettings e DocumentNumberCounter
 
@@ -223,28 +267,70 @@ Regole attuali:
 - i campi fiscali e di contatto possono restare vuoti quando non disponibili;
 - la disattivazione preserva lo storico operativo.
 
+## Ordine fornitore
+
+`SupplierOrder` rappresenta l'impegno di approvvigionamento e possiede:
+
+- codice business stabile;
+- ID fornitore con snapshot di codice e nome;
+- stato `DRAFT`, `SENT`, `PARTIALLY_RECEIVED`, `RECEIVED` o `CANCELED`;
+- data prevista, note, versione concorrente e metadati di creazione, invio e annullo;
+- una o piu `SupplierOrderItem` con ID prodotto e snapshot di codice, nome, prezzo, quantita ordinata, quantita ricevuta e data prevista;
+- zero o piu `SupplierOrderReceipt`, ciascuna con codice stabile, causale, attore, timestamp e righe ricevute.
+
+Regole attuali:
+
+- solo una bozza puo essere inviata;
+- una ricezione e ammessa solo su ordine inviato o parzialmente ricevuto;
+- la quantita ricevuta e cumulativa e non supera mai l'ordinato;
+- lo stato diventa `RECEIVED` soltanto quando ogni riga ha residuo zero;
+- l'annullo richiede una causale, preserva quanto ricevuto e impedisce ulteriori ricezioni;
+- invio, ricezione e annullo acquisiscono un lock sull'ordine e sono idempotenti per intento;
+- un prodotto referenziato da un ordine fornitore non puo essere rinominato o eliminato;
+- ogni riga ricevuta conserva costo concordato, costo effettivo, scostamento, totale e movimento inventariale collegato;
+- la ricezione applica ordine, carico fisico e costo nella stessa transazione e un retry non puo duplicare il movimento;
+- ultimo costo e costo medio ponderato mobile sono aggiornati soltanto sulle quantita con costo noto;
+- lo stock storico privo di evidenza resta non valorizzato e non eredita il prezzo di vendita.
+
 ## Relazioni attuali
 
 - `CustomerOrder` contiene piu `OrderItem`.
 - `FiscalDocument` contiene piu `FiscalDocumentLine`.
-- `StockMovement` conserva codice e nome prodotto come snapshot testuale e registra lo scarico fisico al momento dell'evasione.
+- `StockMovement` collega il prodotto tramite ID, conserva codice e nome come snapshot e registra tutte le variazioni fisiche, incluse evasione e ricezione reso.
 - `CustomerOrder` puo puntare a un `BusinessPartner` di tipo cliente tramite `customerCode`.
 - `AuditEvent` e indipendente e conserva dati testuali dell'evento insieme al contesto di richiesta.
 - `LoginAttempt` e indipendente dagli account per poter tracciare anche username non validi.
 - `IdempotencyRecord` e indipendente dalle entita operative e conserva chiave, attore, operazione, hash richiesta e risposta salvata.
 - `BusinessPartner` e usato come anagrafica operativa per clienti e fornitori.
+- `SupplierOrder` contiene piu `SupplierOrderItem` e piu `SupplierOrderReceipt`; una ricezione contiene piu `SupplierOrderReceiptItem`, ognuno collegabile a un solo `StockMovement` di tipo `PURCHASE_RECEIPT`.
+- `PhysicalInventorySession` contiene piu `PhysicalInventoryItem`; una differenza approvata non nulla collega la riga a un solo `StockMovement` fisico.
+- `SupplierOrder` collega il fornitore e le righe tramite ID stabili ma conserva snapshot descrittivi separati per proteggere lo storico.
 - `FiscalDocument` conserva uno snapshot di `CompanySettings`; non mantiene una relazione viva verso la configurazione.
 - `DocumentNumberCounter` e identificato da tipo documento ed esercizio.
 
+## Invarianti attuali
+
+- Ogni modifica della giacenza fisica produce un movimento autorevole nella stessa transazione.
+- La somma dei delta autorevoli coincide con la quantita fisica proiettata sul prodotto.
+- L'anagrafica prodotto non puo modificare direttamente la quantita.
+- Nessuna rettifica puo portare la giacenza sotto lo stock riservato.
+- Un ordine attivo non puo avere metadati di annullamento e un ordine `CANCELED` deve avere causale, timestamp, actor e ruolo.
+- Ogni ordine puo avere al massimo un reversal di annullamento, obbligatoriamente riferito all'ordine e dotato di riferimento contabile.
+- Un ordine annullato non puo conservare un incasso netto positivo ne una quantita riservata.
+- Una riga ordine fornitore non puo avere quantita ricevuta negativa o superiore alla quantita ordinata.
+- Un ordine fornitore ricevuto non puo avere residui; un ordine annullato deve avere causale e metadati di annullo.
+- Una sessione di inventario non puo essere approvata dal medesimo account che l'ha inviata.
+- Una rettifica di inventario approvata applica la differenza osservata alla giacenza corrente e non puo violare le riserve.
+
 ## Invarianti da rafforzare
 
-- Ogni modifica stock deve produrre un movimento.
 - Il prezzo di una riga ordine deve rimanere snapshot del momento di acquisto.
 - I documenti simulati non devono essere presentati come fiscalmente validi.
 - Un account deve rispettare la password policy backend al momento della creazione.
 - Un ordine non puo avere piu di una fattura simulata o piu di una nota credito simulata.
-- Un admin non deve potersi autocancellare.
-- Solo super admin puo creare o rimuovere admin.
+- Nessun account viene eliminato fisicamente dal workflow operativo; la disabilitazione preserva storico, ownership e username riservato.
+- Un admin non puo disabilitare o modificare il proprio account tramite operazioni amministrative.
+- Solo il super admin puo creare o gestire account admin.
 - La numerazione documento deve restare univoca e monotona per tipo ed esercizio anche in concorrenza.
 
 ## Gap verso prodotto professionale

@@ -3,8 +3,8 @@ import type { CompanySettings, CompanySettingsPayload } from './types';
 
 const baseUrl = '/api/company-settings';
 
-export function fetchCompanySettings(): Promise<CompanySettings> {
-  return request<CompanySettings>(baseUrl);
+export function fetchCompanySettings(signal?: AbortSignal): Promise<CompanySettings> {
+  return request<CompanySettings>(baseUrl, { signal });
 }
 
 export function updateCompanySettings(payload: CompanySettingsPayload): Promise<CompanySettings> {

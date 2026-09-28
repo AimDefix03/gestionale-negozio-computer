@@ -35,6 +35,18 @@ public class CustomerOrder {
 
     private String customerCode;
 
+    private Long customerAccountId;
+
+    private Long partnerId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private OrderCustomerType customerType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private OrderOwnershipStatus ownershipStatus;
+
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
@@ -62,13 +74,41 @@ public class CustomerOrder {
     @Column(nullable = false)
     private LocalDateTime statusChangedAt;
 
+    @Column(length = 120)
+    private String cancellationReference;
+
+    @Column(length = 500)
+    private String cancellationReason;
+
+    private LocalDateTime canceledAt;
+
+    @Column(length = 120)
+    private String canceledBy;
+
+    @Column(length = 80)
+    private String canceledByRole;
+
     protected CustomerOrder() {
     }
 
-    CustomerOrder(String code, String customer, String customerCode, PaymentMethod paymentMethod, List<OrderItem> items, LocalDateTime timestamp) {
+    CustomerOrder(
+            String code,
+            String customer,
+            String customerCode,
+            Long customerAccountId,
+            Long partnerId,
+            OrderCustomerType customerType,
+            PaymentMethod paymentMethod,
+            List<OrderItem> items,
+            LocalDateTime timestamp
+    ) {
         this.code = code;
         this.customer = customer.trim();
         this.customerCode = optional(customerCode);
+        this.customerAccountId = customerAccountId;
+        this.partnerId = partnerId;
+        this.customerType = Objects.requireNonNull(customerType);
+        this.ownershipStatus = ownershipStatus(customerAccountId, partnerId);
         this.timestamp = Objects.requireNonNull(timestamp);
         PaymentMethod selectedPaymentMethod = Objects.requireNonNull(paymentMethod);
         if (!selectedPaymentMethod.isSelectable()) {
@@ -83,6 +123,10 @@ public class CustomerOrder {
         this.payment.assignOrder(this);
     }
 
+    CustomerOrder(String code, String customer, String customerCode, PaymentMethod paymentMethod, List<OrderItem> items, LocalDateTime timestamp) {
+        this(code, customer, customerCode, null, null, OrderCustomerType.LEGACY_UNRESOLVED, paymentMethod, items, timestamp);
+    }
+
     private void addItem(OrderItem item) {
         item.assignOrder(this);
         items.add(item);
@@ -92,6 +136,10 @@ public class CustomerOrder {
     public String getCode() { return code; }
     public String getCustomer() { return customer; }
     public String getCustomerCode() { return customerCode; }
+    public Long getCustomerAccountId() { return customerAccountId; }
+    public Long getPartnerId() { return partnerId; }
+    public OrderCustomerType getCustomerType() { return customerType; }
+    public OrderOwnershipStatus getOwnershipStatus() { return ownershipStatus; }
     public LocalDateTime getTimestamp() { return timestamp; }
     public String getPaymentMethod() { return paymentMethod; }
     public OrderPayment getPayment() { return payment; }
@@ -100,6 +148,11 @@ public class CustomerOrder {
     public BigDecimal getTotal() { return total; }
     public OrderStatus getStatus() { return status; }
     public LocalDateTime getStatusChangedAt() { return statusChangedAt; }
+    public String getCancellationReference() { return cancellationReference; }
+    public String getCancellationReason() { return cancellationReason; }
+    public LocalDateTime getCanceledAt() { return canceledAt; }
+    public String getCanceledBy() { return canceledBy; }
+    public String getCanceledByRole() { return canceledByRole; }
 
     void confirm(LocalDateTime changedAt) {
         requireStatus(OrderStatus.DRAFT, "Puoi confermare solo un ordine in bozza.");
@@ -111,14 +164,25 @@ public class CustomerOrder {
         changeStatus(OrderStatus.FULFILLED, changedAt);
     }
 
-    OrderStatus cancel(LocalDateTime changedAt) {
-        if (status != OrderStatus.DRAFT && status != OrderStatus.CONFIRMED) {
-            throw new IllegalStateException("Puoi annullare solo ordini in bozza o confermati.");
-        }
+    boolean requiresCancellationReversal() {
+        requireCancellationStatus();
+        return payment.requiresCancellationReversal();
+    }
+
+    OrderCancellationResult cancel(String transactionCode, String reference, String reason, LocalDateTime changedAt, String actor, String actorRole) {
+        requireCancellationStatus();
         OrderStatus previousStatus = status;
+        String cancellationReason = required(reason, "La motivazione dell'annullamento e obbligatoria.");
+        String cancellationActor = required(actor, "L'operatore dell'annullamento e obbligatorio.");
+        String cancellationActorRole = required(actorRole, "Il ruolo dell'operatore dell'annullamento e obbligatorio.");
+        PaymentTransaction reversal = payment.cancelForOrder(id, transactionCode, reference, cancellationReason, changedAt, cancellationActor, cancellationActorRole);
+        this.cancellationReference = optional(reference);
+        this.cancellationReason = cancellationReason;
+        this.canceledAt = Objects.requireNonNull(changedAt);
+        this.canceledBy = cancellationActor;
+        this.canceledByRole = cancellationActorRole;
         changeStatus(OrderStatus.CANCELED, changedAt);
-        payment.cancel(changedAt);
-        return previousStatus;
+        return new OrderCancellationResult(previousStatus, reversal);
     }
 
     void addReturn(OrderReturn orderReturn) {
@@ -137,9 +201,19 @@ public class CustomerOrder {
         return status == OrderStatus.FULFILLED;
     }
 
+    boolean isOwnedBy(long accountId) {
+        return customerAccountId != null && customerAccountId == accountId;
+    }
+
     private void requireStatus(OrderStatus expected, String message) {
         if (status != expected) {
             throw new IllegalStateException(message);
+        }
+    }
+
+    private void requireCancellationStatus() {
+        if (status != OrderStatus.DRAFT && status != OrderStatus.CONFIRMED) {
+            throw new IllegalStateException("Puoi annullare solo ordini in bozza o confermati.");
         }
     }
 
@@ -150,5 +224,22 @@ public class CustomerOrder {
 
     private static String optional(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static String required(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
+    }
+
+    private static OrderOwnershipStatus ownershipStatus(Long accountId, Long partnerId) {
+        if (accountId != null) {
+            return OrderOwnershipStatus.ACCOUNT;
+        }
+        if (partnerId != null) {
+            return OrderOwnershipStatus.PARTNER;
+        }
+        return OrderOwnershipStatus.UNRESOLVED;
     }
 }

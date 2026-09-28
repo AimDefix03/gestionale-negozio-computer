@@ -1,10 +1,11 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useMemo } from 'react';
 import { Product, ProductCategory, ProductPayload } from '../api';
+import useDraftState from '../hooks/useDraftState';
 
 type Props = {
   editingProduct: Product | null;
   busy: boolean;
-  onSubmit: (payload: ProductPayload) => Promise<void>;
+  onSubmit: (payload: ProductPayload) => Promise<boolean>;
   onCancel: () => void;
 };
 
@@ -16,21 +17,12 @@ const initialForm = {
   brand: '',
   productType: '',
   usageContext: '',
-  quantity: '0',
   price: '0',
   discount: '0'
 };
 
 export default function ProductForm({ editingProduct, busy, onSubmit, onCancel }: Props) {
-  const [form, setForm] = useState(initialForm);
-
-  useEffect(() => {
-    if (!editingProduct) {
-      setForm(initialForm);
-      return;
-    }
-
-    setForm({
+  const initialValue = useMemo(() => editingProduct ? ({
       code: editingProduct.code,
       name: editingProduct.name,
       description: editingProduct.description,
@@ -38,15 +30,19 @@ export default function ProductForm({ editingProduct, busy, onSubmit, onCancel }
       brand: editingProduct.brand,
       productType: editingProduct.productType,
       usageContext: editingProduct.usageContext,
-      quantity: String(editingProduct.quantity),
       price: String(editingProduct.price),
       discount: String(editingProduct.discount)
-    });
-  }, [editingProduct]);
+    }) : initialForm, [editingProduct]);
+  const { value: form, setValue: setForm, dirty, clear } = useDraftState({
+    key: `catalog:${editingProduct?.code ?? 'new'}`,
+    view: 'catalog',
+    label: editingProduct ? `Modifica prodotto ${editingProduct.code}` : 'Nuovo prodotto',
+    initialValue
+  });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSubmit({
+    const saved = await onSubmit({
       code: form.code,
       name: form.name,
       description: form.description,
@@ -54,14 +50,19 @@ export default function ProductForm({ editingProduct, busy, onSubmit, onCancel }
       brand: form.brand,
       productType: form.productType,
       usageContext: form.usageContext,
-      quantity: Number(form.quantity),
       price: Number(form.price),
       discount: Number(form.discount)
     });
+    if (saved) clear();
   }
 
   function updateField<Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function cancelEdit() {
+    clear();
+    onCancel();
   }
 
   return (
@@ -69,13 +70,13 @@ export default function ProductForm({ editingProduct, busy, onSubmit, onCancel }
       <div className="section-heading compact">
         <span>Catalogo</span>
         <h2>{editingProduct ? 'Modifica prodotto' : 'Nuovo prodotto'}</h2>
-        <p>Gestisci anagrafica, classificazione e disponibilita.</p>
+        <p>Gestisci anagrafica e classificazione. La giacenza si registra dal magazzino.</p>
       </div>
 
       <div className="form-grid">
         <label>
           Codice
-          <input value={form.code} onChange={(event) => updateField('code', event.target.value)} required />
+          <input value={form.code} readOnly={Boolean(editingProduct && !editingProduct.capabilities.canChangeCode)} onChange={(event) => updateField('code', event.target.value)} required />
         </label>
         <label>
           Nome
@@ -101,10 +102,6 @@ export default function ProductForm({ editingProduct, busy, onSubmit, onCancel }
           <input value={form.usageContext} onChange={(event) => updateField('usageContext', event.target.value)} />
         </label>
         <label>
-          Quantita
-          <input type="number" min="0" value={form.quantity} onChange={(event) => updateField('quantity', event.target.value)} required />
-        </label>
-        <label>
           Prezzo
           <input type="number" min="0" step="0.01" value={form.price} onChange={(event) => updateField('price', event.target.value)} required />
         </label>
@@ -119,7 +116,8 @@ export default function ProductForm({ editingProduct, busy, onSubmit, onCancel }
       </div>
 
       <div className="form-actions">
-        {editingProduct && <button className="button secondary" type="button" onClick={onCancel}>Annulla</button>}
+        {dirty && <span className="draft-status" role="status">Bozza salvata per questa sessione</span>}
+        {editingProduct && <button className="button secondary" type="button" onClick={cancelEdit}>Annulla</button>}
         <button className="button primary" type="submit" disabled={busy}>{busy ? 'Salvataggio...' : editingProduct ? 'Salva modifiche' : 'Crea prodotto'}</button>
       </div>
     </form>

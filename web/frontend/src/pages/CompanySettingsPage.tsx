@@ -1,25 +1,28 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useMemo } from 'react';
 import { CompanySettings, CompanySettingsPayload } from '../api';
+import useDraftState from '../hooks/useDraftState';
 import { dateTime } from '../utils/formatters';
 
 type Props = {
   settings: CompanySettings | null;
   busy: boolean;
-  onSave: (payload: CompanySettingsPayload) => void;
+  onSave: (payload: CompanySettingsPayload) => Promise<boolean>;
   onReload: () => void;
 };
 
 export default function CompanySettingsPage({ settings, busy, onSave, onReload }: Props) {
-  const [form, setForm] = useState<CompanySettingsPayload | null>(null);
-
-  useEffect(() => {
-    if (!settings) {
-      setForm(null);
-      return;
-    }
-    const { configured: _configured, updatedAt: _updatedAt, updatedBy: _updatedBy, ...payload } = settings;
-    setForm(payload);
+  const initialForm = useMemo<CompanySettingsPayload | null>(() => {
+    if (!settings) return null;
+    const { configured: _configured, missingDocumentFields: _missingDocumentFields, updatedAt: _updatedAt, updatedBy: _updatedBy, ...payload } = settings;
+    return payload;
   }, [settings]);
+  const { value: form, setValue: setForm, dirty, clear } = useDraftState({
+    key: 'company:settings',
+    view: 'company',
+    label: 'Configurazione aziendale',
+    initialValue: initialForm,
+    enabled: Boolean(settings)
+  });
 
   if (!settings || !form) {
     return (
@@ -30,9 +33,14 @@ export default function CompanySettingsPage({ settings, busy, onSave, onReload }
     );
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (form) onSave(form);
+    if (form && await onSave(form)) clear();
+  }
+
+  function restoreServerValues() {
+    clear();
+    onReload();
   }
 
   return (
@@ -42,6 +50,7 @@ export default function CompanySettingsPage({ settings, busy, onSave, onReload }
         <div className="settings-status">
           <span className={`status-badge ${settings.configured ? 'ok' : 'warning'}`}>{settings.configured ? 'Configurata' : 'Da completare'}</span>
           <small>Versione {settings.version} · aggiornata da {settings.updatedBy} il {dateTime.format(new Date(settings.updatedAt))}</small>
+          {!settings.configured && <small>Dati necessari ai documenti mancanti: {settings.missingDocumentFields.map(documentFieldLabel).join(', ')}.</small>}
         </div>
       </section>
 
@@ -59,6 +68,7 @@ export default function CompanySettingsPage({ settings, busy, onSave, onReload }
             <label>Citta<input value={form.city} maxLength={120} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
             <label>Provincia<input value={form.province} maxLength={8} onChange={(event) => setForm({ ...form, province: event.target.value })} /></label>
             <label>Paese ISO<input value={form.countryCode} maxLength={2} placeholder="IT" onChange={(event) => setForm({ ...form, countryCode: event.target.value })} /></label>
+            <label className="wide">Fuso orario aziendale<input list="company-time-zones" value={form.timeZone} maxLength={64} onChange={(event) => setForm({ ...form, timeZone: event.target.value })} required /><datalist id="company-time-zones"><option value="Europe/Rome" /><option value="Europe/Paris" /><option value="Europe/Berlin" /><option value="UTC" /></datalist></label>
           </div>
         </section>
 
@@ -74,7 +84,7 @@ export default function CompanySettingsPage({ settings, busy, onSave, onReload }
           </div>
           <div className="settings-preview">
             <span>Anteprima numerazione</span>
-            <strong>{form.invoicePrefix.toUpperCase() || 'FS'}-{new Date().getFullYear()}-{String(1).padStart(form.numberPadding, '0')}</strong>
+            <strong>{form.invoicePrefix.toUpperCase() || 'FS'}-{businessYear(form.timeZone)}-{String(1).padStart(form.numberPadding, '0')}</strong>
             <small>Prefissi e lunghezza non sono modificabili dopo il primo documento dell'esercizio.</small>
           </div>
           <div className="settings-warning"><strong>Ambito funzionale</strong><p>Questi documenti restano simulati e non costituiscono fatturazione elettronica o adempimento fiscale.</p></div>
@@ -83,8 +93,20 @@ export default function CompanySettingsPage({ settings, busy, onSave, onReload }
 
       <section className="panel settings-actions">
         <p>Il salvataggio e tracciato nell'audit log e protetto da controllo versione.</p>
-        <div className="form-actions"><button className="button secondary" type="button" onClick={onReload}>Ripristina dati</button><button className="button primary" disabled={busy}>Salva configurazione</button></div>
+        <div className="form-actions">{dirty && <span className="draft-status" role="status">Bozza salvata per questa sessione</span>}<button className="button secondary" type="button" onClick={restoreServerValues}>Ripristina dati</button><button className="button primary" disabled={busy}>Salva configurazione</button></div>
       </section>
     </form>
   );
+}
+
+function businessYear(timeZone: string) {
+  try {
+    return new Intl.DateTimeFormat('en', { year: 'numeric', timeZone }).format(new Date());
+  } catch {
+    return '----';
+  }
+}
+
+function documentFieldLabel(field: string) {
+  return ({ legalName: 'ragione sociale', taxIdentifier: 'codice fiscale o partita IVA', address: 'indirizzo', postalCode: 'CAP', city: 'citta', province: 'provincia', countryCode: 'paese', timeZone: 'fuso orario' } as Record<string, string>)[field] ?? field;
 }

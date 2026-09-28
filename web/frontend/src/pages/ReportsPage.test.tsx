@@ -27,11 +27,16 @@ const inventory: InventoryReport = {
   physicalUnits: 4,
   reservedUnits: 1,
   availableUnits: 3,
-  inventoryValue: 432,
+  potentialRetailStockValue: 432,
+  knownInventoryCostValue: 280,
+  potentialGrossMarginOnCostedStock: 152,
+  costedUnits: 4,
+  uncostedUnits: 0,
+  costCoveragePercentage: 100,
   lowStockCount: 1,
   outOfStockCount: 0,
   discontinuedCount: 0,
-  products: [{ code: 'GPU-1', name: 'Scheda grafica', category: 'HARDWARE', categoryLabel: 'Hardware', brand: 'Brand', productType: 'Scheda grafica', quantity: 4, reservedQuantity: 1, availableQuantity: 3, price: 120, discount: 10, discountedPrice: 108, stockValue: 432, discontinued: false, stockStatus: 'LOW', stockStatusLabel: 'Scorta bassa' }]
+  products: [{ code: 'GPU-1', name: 'Scheda grafica', category: 'HARDWARE', categoryLabel: 'Hardware', brand: 'Brand', productType: 'Scheda grafica', quantity: 4, reservedQuantity: 1, availableQuantity: 3, price: 120, discount: 10, discountedPrice: 108, potentialRetailValue: 432, lastPurchaseCost: 70, averagePurchaseCost: 70, costedQuantity: 4, uncostedQuantity: 0, costCoveragePercentage: 100, knownInventoryCost: 280, potentialGrossMarginOnCostedStock: 152, discontinued: false, stockStatus: 'LOW', stockStatusLabel: 'Scorta bassa' }]
 };
 
 function setup() {
@@ -43,7 +48,20 @@ function setup() {
     onRefreshSales: vi.fn(),
     onRefreshInventory: vi.fn()
   };
-  render(<ReportsPage sales={sales} inventory={inventory} salesQuery={{ status: 'FULFILLED' }} inventoryQuery={{ stock: 'ALL', discontinued: false }} busy={false} {...callbacks} />);
+  render(<ReportsPage
+    sales={sales}
+    inventory={inventory}
+    salesQuery={{ status: 'FULFILLED' }}
+    inventoryQuery={{ stock: 'ALL', discontinued: false }}
+    salesLoading={false}
+    salesRefreshing={false}
+    salesError=""
+    inventoryLoading={false}
+    inventoryRefreshing={false}
+    inventoryError=""
+    busy={false}
+    {...callbacks}
+  />);
   return callbacks;
 }
 
@@ -68,8 +86,40 @@ describe('ReportsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Magazzino' }));
     expect(screen.getByRole('heading', { name: 'Snapshot di magazzino' })).toBeInTheDocument();
     expect(screen.getByText('GPU-1 · Brand')).toBeInTheDocument();
+    expect(screen.getByText('Valore noto a costo')).toBeInTheDocument();
+    expect(screen.getByText('Margine potenziale')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Costo medio' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Valore a costo' })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: 'Scorta bassa' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'PDF' }));
     expect(callbacks.onExportInventory).toHaveBeenCalledWith('PDF');
+  });
+
+  it('mostra l errore del report attivo e consente un retry esplicito', async () => {
+    const user = userEvent.setup();
+    const onRefreshSales = vi.fn();
+    render(<ReportsPage
+      sales={null}
+      inventory={inventory}
+      salesQuery={{ status: 'FULFILLED' }}
+      inventoryQuery={{ stock: 'ALL', discontinued: false }}
+      salesLoading={false}
+      salesRefreshing={false}
+      salesError="Servizio report vendite non disponibile"
+      inventoryLoading={false}
+      inventoryRefreshing={false}
+      inventoryError=""
+      busy={false}
+      onSalesQueryChange={vi.fn()}
+      onInventoryQueryChange={vi.fn()}
+      onExportSales={vi.fn()}
+      onExportInventory={vi.fn()}
+      onRefreshSales={onRefreshSales}
+      onRefreshInventory={vi.fn()}
+    />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Servizio report vendite non disponibile');
+    await user.click(screen.getByRole('button', { name: 'Riprova' }));
+    expect(onRefreshSales).toHaveBeenCalledOnce();
   });
 });

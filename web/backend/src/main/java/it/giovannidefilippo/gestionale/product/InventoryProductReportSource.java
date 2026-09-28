@@ -14,6 +14,13 @@ public record InventoryProductReportSource(
         BigDecimal price,
         BigDecimal discount,
         BigDecimal discountedPrice,
+        BigDecimal lastPurchaseCost,
+        BigDecimal averagePurchaseCost,
+        int costedQuantity,
+        int uncostedQuantity,
+        BigDecimal costCoveragePercentage,
+        BigDecimal knownInventoryCost,
+        BigDecimal potentialGrossMarginOnCostedStock,
         boolean discontinued
 ) {
 }

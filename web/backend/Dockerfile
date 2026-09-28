@@ -27,4 +27,4 @@ USER 10001:10001
 
 EXPOSE 8080 9090
 
-ENTRYPOINT ["/usr/local/bin/resolve-file-secrets", "GESTIONALE_DB_PASSWORD", "?GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD", "--", "java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/usr/local/bin/resolve-file-secrets", "GESTIONALE_DB_RUNTIME_PASSWORD", "GESTIONALE_DB_MIGRATOR_PASSWORD", "?GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD", "--", "java", "-jar", "/app/app.jar"]

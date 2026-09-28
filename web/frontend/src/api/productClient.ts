@@ -1,14 +1,22 @@
 import { fetchAllPages, request, toQueryString } from './httpClient';
-import type { PageResponse, Product, ProductLookup, ProductPayload, ProductQuery } from './types';
+import type { CustomerProduct, PageResponse, Product, ProductLookup, ProductOperationalDetail, ProductPayload, ProductQuery } from './types';
 
 const baseUrl = '/api/products';
 
-export function fetchProductPage(query: ProductQuery = {}): Promise<PageResponse<Product>> {
-  return request<PageResponse<Product>>(`${baseUrl}${toQueryString(query)}`);
+export function fetchProductPage(query: ProductQuery = {}, signal?: AbortSignal): Promise<PageResponse<Product>> {
+  return request<PageResponse<Product>>(`${baseUrl}${toQueryString(query)}`, { signal });
 }
 
-export function fetchProductLookup(): Promise<ProductLookup[]> {
-  return request<ProductLookup[]>(`${baseUrl}/lookup`);
+export function fetchCustomerProductPage(query: ProductQuery = {}, signal?: AbortSignal): Promise<PageResponse<CustomerProduct>> {
+  return request<PageResponse<CustomerProduct>>(`/api/customer/catalog${toQueryString(query)}`, { signal });
+}
+
+export function fetchProductLookup(signal?: AbortSignal): Promise<ProductLookup[]> {
+  return request<ProductLookup[]>(`${baseUrl}/lookup`, { signal });
+}
+
+export function fetchProductDetail(code: string, signal?: AbortSignal): Promise<ProductOperationalDetail> {
+  return request<ProductOperationalDetail>(`${baseUrl}/${encodeURIComponent(code)}/detail`, { signal });
 }
 
 export function fetchProducts(query: ProductQuery = {}): Promise<Product[]> {

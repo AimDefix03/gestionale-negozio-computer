@@ -8,7 +8,8 @@ import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,7 +58,7 @@ class ReportExportServiceTest {
     }
 
     private static SalesReportResponse salesReport(String code, String customer) {
-        LocalDateTime generatedAt = LocalDateTime.of(2026, 7, 14, 10, 30);
+        OffsetDateTime generatedAt = OffsetDateTime.of(2026, 7, 14, 10, 30, 0, 0, ZoneOffset.UTC);
         SalesReportResponse.SalesOrderRow order = new SalesReportResponse.SalesOrderRow(
                 code,
                 generatedAt.minusDays(1),
@@ -103,17 +104,29 @@ class ReportExportServiceTest {
                 money("10.00"),
                 money("108.00"),
                 money("432.00"),
+                money("70.00"),
+                money("70.00"),
+                4,
+                0,
+                money("100.00"),
+                money("280.00"),
+                money("152.00"),
                 false,
                 "LOW",
                 "Scorta bassa"
         );
         return new InventoryReportResponse(
-                LocalDateTime.of(2026, 7, 14, 10, 30),
+                OffsetDateTime.of(2026, 7, 14, 10, 30, 0, 0, ZoneOffset.UTC),
                 1,
                 4,
                 1,
                 3,
                 money("432.00"),
+                money("280.00"),
+                money("152.00"),
+                4,
+                0,
+                money("100.00"),
                 1,
                 0,
                 0,

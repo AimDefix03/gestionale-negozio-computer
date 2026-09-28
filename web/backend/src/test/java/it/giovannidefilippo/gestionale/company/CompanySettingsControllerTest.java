@@ -1,11 +1,11 @@
 package it.giovannidefilippo.gestionale.company;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import it.giovannidefilippo.gestionale.user.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,7 +34,7 @@ class CompanySettingsControllerTest {
     @Test
     void superAdminCanReadCompanySettings() throws Exception {
         mockMvc.perform(get("/api/company-settings")
-                        .header("X-Session-Token", login("admin", "RootSecure123!", UserRole.SUPER_ADMIN)))
+                        .header("X-Session-Token", login("test_super_admin", "Test-Bootstrap-9842!", UserRole.SUPER_ADMIN)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.defaultVatRate").value(0.22))
                 .andExpect(jsonPath("$.invoicePrefix").value("FS"))
@@ -45,7 +45,7 @@ class CompanySettingsControllerTest {
     void regularAdminCannotReadCompanySettings() throws Exception {
         String username = "company_admin_" + UUID.randomUUID().toString().substring(0, 8);
         String password = "Violet-Quartz-928!";
-        userService.createAccount(username, password, UserRole.ADMIN, "admin", "Account test configurazione aziendale");
+        userService.createAccount(username, password, UserRole.ADMIN, "test_super_admin", "Account test configurazione aziendale");
 
         mockMvc.perform(get("/api/company-settings")
                         .header("X-Session-Token", login(username, password, UserRole.ADMIN)))

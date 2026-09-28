@@ -11,6 +11,7 @@ Spring Modulith verifica automaticamente che il grafo dei moduli business non co
 - `user`: account, ruoli, permessi e sessioni.
 - `product`: catalogo e ciclo di vita del prodotto.
 - `partner`: clienti e fornitori.
+- `purchase`: ordini fornitore e ricezioni amministrative.
 - `inventory`: movimenti e disponibilita di magazzino.
 - `order`: ordini, righe, pagamenti, ledger finanziario e resi.
 - `document`: documenti simulati e snapshot cliente.
@@ -23,6 +24,9 @@ Spring Modulith verifica automaticamente che il grafo dei moduli business non co
 user
 product
 partner
+purchase
+├── partner
+└── product
 inventory
 └── product
 order
@@ -42,6 +46,10 @@ reporting
 Le frecce logiche procedono dai moduli orchestratori verso le capacita richieste. Nessun modulo di base deve dipendere da un modulo che gia lo utilizza.
 
 Il controllo sull'utilizzo di un prodotto negli ordini passa attraverso `ProductOrderUsage`, porta dichiarata dal modulo `product` e implementata nel modulo `order`. In questo modo il catalogo non conosce repository o entita degli ordini.
+
+Il controllo sull'utilizzo di un prodotto negli ordini fornitore passa attraverso `ProductProcurementUsage`, porta dichiarata dal modulo `product` e implementata nel modulo `purchase`. Il catalogo puo quindi impedire rinomina o eliminazione senza dipendere da repository o entita di approvvigionamento.
+
+Il modulo `purchase` usa le API applicative pubbliche di `partner` e `product` per validare fornitore e prodotti e conserva soltanto ID stabili e snapshot nell'aggregate. Durante la ricezione invoca il comando pubblico di `inventory`, che applica carico fisico e valorizzazione nella stessa transazione e restituisce l'ID del movimento; non accede direttamente ai repository degli altri moduli.
 
 Il controllo sull'esistenza di documenti nell'esercizio passa attraverso `DocumentNumberingUsage`, porta dichiarata dal modulo `company` e implementata nel modulo `document`. Il modulo documenti usa il servizio aziendale per ottenere in transazione configurazione bloccata, aliquota e prefissi, senza accedere al repository interno di `company`.
 

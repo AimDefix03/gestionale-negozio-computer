@@ -11,6 +11,14 @@ type ApiError = {
 };
 
 let sessionToken = '';
+const sessionExpiredListeners = new Set<(error: SessionExpiredError) => void>();
+const pendingIdempotencyIntents = new Map<string, IdempotencyIntent>();
+const idempotencyIntentTtlMs = 24 * 60 * 60 * 1000;
+
+type IdempotencyIntent = {
+  key: string;
+  createdAt: number;
+};
 
 export type DownloadedFile = {
   blob: Blob;
@@ -48,6 +56,12 @@ export function setSessionToken(token: string) {
 
 export function clearSessionToken() {
   sessionToken = '';
+  clearPendingIdempotencyIntents();
+}
+
+export function subscribeToSessionExpiration(listener: (error: SessionExpiredError) => void): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => sessionExpiredListeners.delete(listener);
 }
 
 export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -65,21 +79,80 @@ export async function requestBlob(url: string, options: RequestInit = {}): Promi
   await requireSuccess(response, headers);
   return {
     blob: await response.blob(),
-    filename: filenameFrom(response.headers.get('Content-Disposition')) ?? 'download'
+    filename: parseDownloadFilename(response.headers.get('Content-Disposition'))
   };
+}
+
+export async function requestIdempotent<T>(
+  url: string,
+  scope: string,
+  intentPayload: unknown,
+  options: RequestInit = {}
+): Promise<T> {
+  purgeExpiredIdempotencyIntents();
+  const signature = `${scope}\n${url}\n${stableSerialize(intentPayload)}`;
+  const intent = pendingIdempotencyIntents.get(signature) ?? createIdempotencyIntent(scope);
+  pendingIdempotencyIntents.set(signature, intent);
+  const headers = new Headers(options.headers);
+  headers.set('Idempotency-Key', intent.key);
+
+  try {
+    const response = await request<T>(url, { ...options, headers });
+    clearIntent(signature, intent);
+    return response;
+  } catch (error) {
+    if (isDefinitiveFailure(error)) {
+      clearIntent(signature, intent);
+    }
+    throw error;
+  }
 }
 
 export function saveDownloadedFile(file: DownloadedFile) {
   const url = URL.createObjectURL(file.blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = file.filename;
+  link.download = sanitizeFilename(file.filename);
+  link.rel = 'noopener';
+  link.hidden = true;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export function idempotencyHeaders(scope: string): HeadersInit {
-  return { 'Idempotency-Key': `${scope}-${createRequestId()}` };
+export function parseDownloadFilename(contentDisposition: string | null, fallback = 'download'): string {
+  if (!contentDisposition) return sanitizeFilename(fallback);
+
+  const encoded = contentDisposition.match(/filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i)?.[2];
+  if (encoded) {
+    try {
+      return sanitizeFilename(decodeURIComponent(stripQuotes(encoded.trim())), fallback);
+    } catch {
+      return sanitizeFilename(fallback);
+    }
+  }
+
+  const quoted = contentDisposition.match(/filename\s*=\s*"((?:\\.|[^"])*)"/i)?.[1];
+  if (quoted) return sanitizeFilename(quoted.replace(/\\(.)/g, '$1'), fallback);
+
+  const plain = contentDisposition.match(/filename\s*=\s*([^;]+)/i)?.[1];
+  return sanitizeFilename(plain ? stripQuotes(plain.trim()) : fallback, fallback);
+}
+
+export function sanitizeFilename(filename: string, fallback = 'download'): string {
+  const normalized = filename
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/^\.+/, '')
+    .trim()
+    .slice(0, 180);
+  return normalized && normalized !== '.' && normalized !== '..' ? normalized : fallback;
+}
+
+export function clearPendingIdempotencyIntents() {
+  pendingIdempotencyIntents.clear();
 }
 
 export async function fetchAllPages<T>(loader: (page: number, size: number) => Promise<PageResponse<T>>, requestedSize?: number): Promise<T[]> {
@@ -114,6 +187,51 @@ function createRequestId(): string {
   return `web-${randomPart}`;
 }
 
+function createIdempotencyIntent(scope: string): IdempotencyIntent {
+  return {
+    key: `${scope}-${createRequestId()}`,
+    createdAt: Date.now()
+  };
+}
+
+function clearIntent(signature: string, intent: IdempotencyIntent) {
+  if (pendingIdempotencyIntents.get(signature) === intent) {
+    pendingIdempotencyIntents.delete(signature);
+  }
+}
+
+function purgeExpiredIdempotencyIntents() {
+  const oldestAllowed = Date.now() - idempotencyIntentTtlMs;
+  pendingIdempotencyIntents.forEach((intent, signature) => {
+    if (intent.createdAt < oldestAllowed) {
+      pendingIdempotencyIntents.delete(signature);
+    }
+  });
+}
+
+function isDefinitiveFailure(error: unknown): boolean {
+  if (error instanceof SessionExpiredError) return true;
+  if (!(error instanceof ApiRequestError)) return false;
+  if (error.code === 'IDEMPOTENCY_IN_PROGRESS') return false;
+  return error.status >= 400 && error.status < 500;
+}
+
+function stableSerialize(value: unknown): string {
+  const serialized = JSON.stringify(canonicalize(value));
+  return serialized ?? String(value);
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalize(entry)])
+  );
+}
+
 function requestHeaders(initial?: HeadersInit): Headers {
   const headers = new Headers(initial);
   headers.set('Content-Type', 'application/json');
@@ -134,16 +252,16 @@ async function requireSuccess(response: Response, requestHeaders: Headers): Prom
     sessionError.code = error?.code ?? 'AUTH_UNAUTHORIZED';
     sessionError.details = details;
     sessionError.requestId = requestId;
+    if (sessionToken) {
+      sessionExpiredListeners.forEach((listener) => listener(sessionError));
+    }
     throw sessionError;
   }
   throw new ApiRequestError(message, response.status, error?.code, details, requestId);
 }
 
-function filenameFrom(contentDisposition: string | null): string | null {
-  if (!contentDisposition) return null;
-  const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  if (encoded) return decodeURIComponent(encoded.replace(/^"|"$/g, ''));
-  return contentDisposition.match(/filename="?([^";]+)"?/i)?.[1] ?? null;
+function stripQuotes(value: string): string {
+  return value.replace(/^"|"$/g, '');
 }
 
 async function safeJson<T>(response: Response): Promise<T | null> {

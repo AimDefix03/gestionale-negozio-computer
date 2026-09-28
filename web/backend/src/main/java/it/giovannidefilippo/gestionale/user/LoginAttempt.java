@@ -41,15 +41,16 @@ public class LoginAttempt {
     }
 
     void registerFailure(Instant now, int maxAttempts, Duration lockDuration) {
-        if (lockedUntil != null && lockedUntil.isBefore(now)) {
+        Instant effectiveNow = lastAttemptAt != null && lastAttemptAt.isAfter(now) ? lastAttemptAt : now;
+        if (lockedUntil != null && lockedUntil.isBefore(effectiveNow)) {
             attempts = 0;
             lockedUntil = null;
-            firstAttemptAt = now;
+            firstAttemptAt = effectiveNow;
         }
         attempts++;
-        lastAttemptAt = now;
+        lastAttemptAt = effectiveNow;
         if (attempts >= maxAttempts) {
-            lockedUntil = now.plus(lockDuration);
+            lockedUntil = effectiveNow.plus(lockDuration);
         }
     }
 

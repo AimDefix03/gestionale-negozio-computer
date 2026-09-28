@@ -14,6 +14,12 @@ type Props = {
   inventory: InventoryReport | null;
   salesQuery: SalesReportQuery;
   inventoryQuery: InventoryReportQuery;
+  salesLoading: boolean;
+  salesRefreshing: boolean;
+  salesError: string;
+  inventoryLoading: boolean;
+  inventoryRefreshing: boolean;
+  inventoryError: string;
   busy: boolean;
   onSalesQueryChange: (query: SalesReportQuery) => void;
   onInventoryQueryChange: (query: InventoryReportQuery) => void;
@@ -45,7 +51,7 @@ function SalesView(props: Props) {
       <section className="panel report-controls">
         <div className="panel-toolbar">
           <div className="section-heading compact"><span>Analisi commerciale</span><h2>Vendite e incassi</h2><p>Valore ordini, pagamenti, rimborsi e saldo residuo.</p></div>
-          <ExportActions busy={props.busy} onExport={props.onExportSales} onRefresh={props.onRefreshSales} />
+          <ExportActions busy={props.busy || props.salesLoading || props.salesRefreshing} onExport={props.onExportSales} onRefresh={props.onRefreshSales} />
         </div>
         <div className="list-filters report-filters">
           <label>Dal<input type="date" value={props.salesQuery.from ?? ''} onChange={(event) => props.onSalesQueryChange({ ...props.salesQuery, from: event.target.value || undefined })} /></label>
@@ -54,6 +60,7 @@ function SalesView(props: Props) {
         </div>
         {report && <ReportTimestamp generatedAt={report.generatedAt} caption={`${report.from} - ${report.to} · ${report.statusLabel}`} />}
       </section>
+      {report && props.salesError && <ReportFailure compact message={`${props.salesError} I dati vendite gia caricati restano disponibili.`} onRetry={props.onRefreshSales} />}
       {report ? (
         <>
           <section className="report-metrics">
@@ -67,9 +74,10 @@ function SalesView(props: Props) {
               <div className="section-heading compact"><span>Dettaglio</span><h2>Ordini nel periodo</h2></div>
               <div className="table-shell report-table-shell">
                 <table>
-                  <thead><tr><th>Ordine</th><th>Data</th><th>Cliente</th><th>Stato</th><th>Valore</th><th>Incassato</th><th>Rimborsato</th><th>Residuo</th></tr></thead>
+                  <caption className="sr-only">Ordini inclusi nel report vendite</caption>
+                  <thead><tr><th scope="col">Ordine</th><th scope="col">Data</th><th scope="col">Cliente</th><th scope="col">Stato</th><th scope="col">Valore</th><th scope="col">Incassato</th><th scope="col">Rimborsato</th><th scope="col">Residuo</th></tr></thead>
                   <tbody>
-                    {report.orders.map((order) => <tr key={order.code}><td className="strong">{order.code}</td><td>{dateTime.format(new Date(order.timestamp))}</td><td>{order.customer}</td><td><span className={`report-status ${order.status.toLowerCase()}`}>{order.statusLabel}</span></td><td>{money.format(order.total)}</td><td>{money.format(order.paidAmount)}</td><td>{money.format(order.refundedAmount)}</td><td>{money.format(order.outstandingAmount)}</td></tr>)}
+                    {report.orders.map((order) => <tr key={order.code}><th scope="row" className="strong">{order.code}</th><td>{dateTime.format(new Date(order.timestamp))}</td><td>{order.customer}</td><td><span className={`report-status ${order.status.toLowerCase()}`}>{order.statusLabel}</span></td><td>{money.format(order.total)}</td><td>{money.format(order.paidAmount)}</td><td>{money.format(order.refundedAmount)}</td><td>{money.format(order.outstandingAmount)}</td></tr>)}
                     {report.orders.length === 0 && <tr><td colSpan={8} className="empty-table-cell">Nessun ordine per i filtri selezionati.</td></tr>}
                   </tbody>
                 </table>
@@ -84,7 +92,9 @@ function SalesView(props: Props) {
             </section>
           </div>
         </>
-      ) : <ReportLoading />}
+      ) : props.salesError
+        ? <ReportFailure message={props.salesError} onRetry={props.onRefreshSales} />
+        : <ReportLoading message="Caricamento report vendite..." />}
     </>
   );
 }
@@ -97,7 +107,7 @@ function InventoryView(props: Props) {
       <section className="panel report-controls">
         <div className="panel-toolbar">
           <div className="section-heading compact"><span>Controllo scorte</span><h2>Snapshot di magazzino</h2><p>Giacenza fisica, riservata, disponibile e valore corrente.</p></div>
-          <ExportActions busy={props.busy} onExport={props.onExportInventory} onRefresh={props.onRefreshInventory} />
+          <ExportActions busy={props.busy || props.inventoryLoading || props.inventoryRefreshing} onExport={props.onExportInventory} onRefresh={props.onRefreshInventory} />
         </div>
         <div className="list-filters report-filters inventory-report-filters">
           <label className="search-field">Cerca<input value={props.inventoryQuery.q ?? ''} placeholder="Codice, nome, brand o tipo" onChange={(event) => props.onInventoryQueryChange({ ...props.inventoryQuery, q: event.target.value || undefined })} /></label>
@@ -107,10 +117,14 @@ function InventoryView(props: Props) {
         </div>
         {report && <ReportTimestamp generatedAt={report.generatedAt} caption={`${report.productCount} prodotti nel risultato`} />}
       </section>
+      {report && props.inventoryError && <ReportFailure compact message={`${props.inventoryError} I dati di magazzino gia caricati restano disponibili.`} onRetry={props.onRefreshInventory} />}
       {report ? (
         <>
           <section className="report-metrics">
-            <StatCard label="Valore stock" value={money.format(report.inventoryValue)} caption={`${report.productCount} prodotti`} />
+            <StatCard label="Valore potenziale" value={money.format(report.potentialRetailStockValue)} caption="Quantita per prezzo vendita scontato" />
+            <StatCard label="Valore noto a costo" value={money.format(report.knownInventoryCostValue)} caption={`${report.costedUnits} unita valorizzate`} />
+            <StatCard label="Copertura costo" value={`${report.costCoveragePercentage.toFixed(2)}%`} caption={`${report.uncostedUnits} unita senza costo`} />
+            <StatCard label="Margine potenziale" value={money.format(report.potentialGrossMarginOnCostedStock)} caption="Solo quota con costo noto" />
             <StatCard label="Disponibili" value={String(report.availableUnits)} caption={`${report.physicalUnits} unita fisiche`} />
             <StatCard label="Riservate" value={String(report.reservedUnits)} caption="Impegnate da ordini" />
             <StatCard label="Da presidiare" value={String(report.lowStockCount + report.outOfStockCount)} caption={`${report.lowStockCount} basse · ${report.outOfStockCount} esaurite`} />
@@ -119,16 +133,19 @@ function InventoryView(props: Props) {
             <div className="section-heading compact"><span>Inventario</span><h2>Posizione articoli</h2></div>
             <div className="table-shell report-table-shell inventory-report-table">
               <table>
-                <thead><tr><th>Prodotto</th><th>Classificazione</th><th>Fisico</th><th>Riservato</th><th>Disponibile</th><th>Prezzo netto</th><th>Valore stock</th><th>Stato</th></tr></thead>
+                <caption className="sr-only">Posizione articoli inclusi nel report magazzino</caption>
+                <thead><tr><th scope="col">Prodotto</th><th scope="col">Classificazione</th><th scope="col">Fisico</th><th scope="col">Riservato</th><th scope="col">Disponibile</th><th scope="col">Prezzo netto</th><th scope="col">Costo medio</th><th scope="col">Copertura</th><th scope="col">Valore a costo</th><th scope="col">Stato</th></tr></thead>
                 <tbody>
-                  {report.products.map((product) => <tr key={product.code}><td><div className="product-cell"><strong>{product.name}</strong><span>{product.code} · {product.brand}</span></div></td><td><div className="product-cell"><strong>{product.productType}</strong><span>{product.categoryLabel}</span></div></td><td>{product.quantity}</td><td>{product.reservedQuantity}</td><td>{product.availableQuantity}</td><td>{money.format(product.discountedPrice)}</td><td>{money.format(product.stockValue)}</td><td><span className={`report-status ${product.discontinued ? 'canceled' : product.stockStatus.toLowerCase()}`}>{product.discontinued ? 'Disattivato' : product.stockStatusLabel}</span></td></tr>)}
-                  {report.products.length === 0 && <tr><td colSpan={8} className="empty-table-cell">Nessun prodotto per i filtri selezionati.</td></tr>}
+                  {report.products.map((product) => <tr key={product.code}><th scope="row"><div className="product-cell"><strong>{product.name}</strong><span>{product.code} · {product.brand}</span></div></th><td><div className="product-cell"><strong>{product.productType}</strong><span>{product.categoryLabel}</span></div></td><td>{product.quantity}</td><td>{product.reservedQuantity}</td><td>{product.availableQuantity}</td><td>{money.format(product.discountedPrice)}</td><td>{product.averagePurchaseCost === null ? 'Non disponibile' : money.format(product.averagePurchaseCost)}</td><td>{product.costCoveragePercentage.toFixed(2)}%</td><td>{money.format(product.knownInventoryCost)}</td><td><span className={`report-status ${product.discontinued ? 'canceled' : product.stockStatus.toLowerCase()}`}>{product.discontinued ? 'Disattivato' : product.stockStatusLabel}</span></td></tr>)}
+                  {report.products.length === 0 && <tr><td colSpan={10} className="empty-table-cell">Nessun prodotto per i filtri selezionati.</td></tr>}
                 </tbody>
               </table>
             </div>
           </section>
         </>
-      ) : <ReportLoading />}
+      ) : props.inventoryError
+        ? <ReportFailure message={props.inventoryError} onRetry={props.onRefreshInventory} />
+        : <ReportLoading message="Caricamento report magazzino..." />}
     </>
   );
 }
@@ -141,6 +158,15 @@ function ReportTimestamp({ generatedAt, caption }: { generatedAt: string; captio
   return <div className="report-timestamp"><span>Aggiornato {dateTime.format(new Date(generatedAt))}</span><strong>{caption}</strong></div>;
 }
 
-function ReportLoading() {
-  return <section className="panel report-loading" aria-live="polite">Caricamento report...</section>;
+function ReportLoading({ message }: { message: string }) {
+  return <section className="panel report-loading" role="status">{message}</section>;
+}
+
+function ReportFailure({ message, onRetry, compact = false }: { message: string; onRetry: () => void; compact?: boolean }) {
+  return (
+    <section className={`panel report-loading${compact ? ' compact' : ''}`} role="alert">
+      <span>{message}</span>
+      <button className="button secondary compact-button" type="button" onClick={onRetry}>Riprova</button>
+    </section>
+  );
 }

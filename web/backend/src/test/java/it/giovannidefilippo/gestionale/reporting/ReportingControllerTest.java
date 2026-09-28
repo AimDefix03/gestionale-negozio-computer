@@ -1,9 +1,9 @@
 package it.giovannidefilippo.gestionale.reporting;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class ReportingControllerTest {
-    private static final String SUPER_ADMIN_PASSWORD = "RootSecure123!";
+    private static final String SUPER_ADMIN_PASSWORD = "Test-Bootstrap-9842!";
 
     @Autowired
     private MockMvc mockMvc;
@@ -56,7 +56,7 @@ class ReportingControllerTest {
 
     @Test
     void authorizedUserReceivesJsonReportsAndAllRealExportFormats() throws Exception {
-        String token = login("admin", SUPER_ADMIN_PASSWORD, "SUPER_ADMIN");
+        String token = login("test_super_admin", SUPER_ADMIN_PASSWORD, "SUPER_ADMIN");
 
         mockMvc.perform(get("/api/reports/sales")
                         .param("status", "FULFILLED")
@@ -69,7 +69,7 @@ class ReportingControllerTest {
         mockMvc.perform(get("/api/reports/inventory").header("X-Session-Token", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.productCount").isNumber())
-                .andExpect(jsonPath("$.inventoryValue").isNumber())
+                .andExpect(jsonPath("$.potentialRetailStockValue").isNumber())
                 .andExpect(jsonPath("$.products").isArray());
 
         MvcResult csv = export(token, "/api/reports/sales/export", "CSV", "text/csv");
@@ -83,7 +83,7 @@ class ReportingControllerTest {
 
     @Test
     void exportIsRecordedInTheAuditLog() throws Exception {
-        String token = login("admin", SUPER_ADMIN_PASSWORD, "SUPER_ADMIN");
+        String token = login("test_super_admin", SUPER_ADMIN_PASSWORD, "SUPER_ADMIN");
         export(token, "/api/reports/sales/export", "CSV", "text/csv");
 
         mockMvc.perform(get("/api/audit")
@@ -113,8 +113,7 @@ class ReportingControllerTest {
                         .content("""
                                 {
                                   "username": "%s",
-                                  "password": "CustomerStrong123!",
-                                  "role": "CUSTOMER"
+                                  "password": "CustomerStrong123!"
                                 }
                                 """.formatted(username)))
                 .andExpect(status().isCreated());

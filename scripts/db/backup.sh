@@ -4,6 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$SCRIPT_DIR/common.sh"
 . "$SCRIPT_DIR/backup-lifecycle.sh"
+require_database_identity BACKUP
 
 umask 077
 mkdir -p "$BACKUP_DIR"
@@ -38,13 +39,21 @@ fi
 
 wait_for_postgres
 
-compose exec -T postgres pg_dump \
-  -U "$GESTIONALE_DB_USERNAME" \
-  -d "$POSTGRES_DB" \
-  --format=custom \
-  --no-owner \
-  --no-privileges \
-  > "$tmp_file"
+compose exec -T postgres sh -eu -c '
+  password=${GESTIONALE_DB_BACKUP_PASSWORD:-}
+  if [ -n "${GESTIONALE_DB_BACKUP_PASSWORD_FILE:-}" ]; then
+    password=$(cat "$GESTIONALE_DB_BACKUP_PASSWORD_FILE")
+  fi
+  [ -n "$password" ]
+  export PGPASSWORD=$password
+  exec pg_dump \
+    -h 127.0.0.1 \
+    -U "$GESTIONALE_DB_BACKUP_USERNAME" \
+    -d "$POSTGRES_DB" \
+    --format=custom \
+    --no-owner \
+    --no-privileges
+' > "$tmp_file"
 
 if [ ! -s "$tmp_file" ]; then
   echo "Backup non creato: file vuoto." >&2

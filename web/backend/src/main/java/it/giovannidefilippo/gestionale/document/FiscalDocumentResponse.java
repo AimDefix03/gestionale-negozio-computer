@@ -1,8 +1,10 @@
 package it.giovannidefilippo.gestionale.document;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
+
+import it.giovannidefilippo.gestionale.common.BusinessTime;
 
 public record FiscalDocumentResponse(
         Long id,
@@ -14,7 +16,7 @@ public record FiscalDocumentResponse(
         String typeLabel,
         FiscalDocumentStatus status,
         String statusLabel,
-        LocalDateTime createdAt,
+        OffsetDateTime createdAt,
         String relatedOrderCode,
         String customer,
         String companySnapshotLegalName,
@@ -27,6 +29,7 @@ public record FiscalDocumentResponse(
         String companySnapshotCity,
         String companySnapshotProvince,
         String companySnapshotCountryCode,
+        String companySnapshotTimeZone,
         String customerSnapshotCode,
         String customerSnapshotName,
         String customerSnapshotTaxCode,
@@ -44,9 +47,14 @@ public record FiscalDocumentResponse(
         String createdBy,
         String createdByRole,
         String reason,
-        String disclaimer
+        String disclaimer,
+        FiscalDocumentCapabilities capabilities
 ) {
     static FiscalDocumentResponse from(FiscalDocument document) {
+        return from(document, FiscalDocumentCapabilities.none());
+    }
+
+    static FiscalDocumentResponse from(FiscalDocument document, FiscalDocumentCapabilities capabilities) {
         return new FiscalDocumentResponse(
                 document.getId(),
                 document.getCode(),
@@ -57,7 +65,7 @@ public record FiscalDocumentResponse(
                 document.getType().getLabel(),
                 document.getStatus(),
                 document.getStatus().getLabel(),
-                document.getCreatedAt(),
+                BusinessTime.offsetFromUtc(document.getCreatedAt(), document.getCompanySnapshotTimeZone()),
                 document.getRelatedOrderCode(),
                 document.getCustomer(),
                 document.getCompanySnapshotLegalName(),
@@ -70,6 +78,7 @@ public record FiscalDocumentResponse(
                 document.getCompanySnapshotCity(),
                 document.getCompanySnapshotProvince(),
                 document.getCompanySnapshotCountryCode(),
+                document.getCompanySnapshotTimeZone(),
                 document.getCustomerSnapshotCode(),
                 document.getCustomerSnapshotName(),
                 document.getCustomerSnapshotTaxCode(),
@@ -87,7 +96,8 @@ public record FiscalDocumentResponse(
                 document.getCreatedBy(),
                 document.getCreatedByRole(),
                 document.getReason(),
-                document.getDisclaimer()
+                document.getDisclaimer(),
+                capabilities
         );
     }
 

@@ -70,6 +70,16 @@ public class AuditService {
         return repository.countBySeverityAndTimestampAfter(severity, timestamp);
     }
 
+    public AccountAuditSummary summarizeAccountActivity(String actor) {
+        return new AccountAuditSummary(
+                repository.countByActorIgnoreCaseAndCategory(actor, AuditCategory.INVENTORY),
+                repository.countByActorIgnoreCaseAndCategory(actor, AuditCategory.ORDER),
+                repository.countByActorIgnoreCaseAndEntityType(actor, "PAYMENT_TRANSACTION"),
+                repository.countByActorIgnoreCaseAndEntityType(actor, "ORDER_RETURN"),
+                repository.countByActorIgnoreCaseAndCategory(actor, AuditCategory.DOCUMENT)
+        );
+    }
+
     private Specification<AuditEvent> specification(String q, AuditCategory category, AuditSeverity severity) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();

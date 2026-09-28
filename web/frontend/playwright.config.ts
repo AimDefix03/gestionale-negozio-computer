@@ -22,7 +22,27 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }
+    },
+    {
+      name: 'chromium-mobile',
+      testMatch: '**/accessibility.spec.ts',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } }
+    },
+    {
+      name: 'chromium-tablet',
+      testMatch: '**/accessibility.spec.ts',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } }
+    },
+    {
+      name: 'firefox',
+      testMatch: '**/accessibility.spec.ts',
+      use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } }
+    },
+    {
+      name: 'webkit',
+      testMatch: '**/accessibility.spec.ts',
+      use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } }
     }
   ],
   outputDir: 'test-results/playwright'

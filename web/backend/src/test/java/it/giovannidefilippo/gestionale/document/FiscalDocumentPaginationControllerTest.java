@@ -1,7 +1,10 @@
 package it.giovannidefilippo.gestionale.document;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
+import it.giovannidefilippo.gestionale.common.TestCompanySettings;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import it.giovannidefilippo.gestionale.order.OrderRequests;
 import it.giovannidefilippo.gestionale.order.OrderResponse;
 import it.giovannidefilippo.gestionale.order.OrderService;
@@ -12,8 +15,9 @@ import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,10 +45,21 @@ class FiscalDocumentPaginationControllerTest {
     private ProductService productService;
 
     @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
     private OrderService orderService;
 
     @Autowired
     private FiscalDocumentService documentService;
+
+    @Autowired
+    private CompanySettingsService companySettingsService;
+
+    @BeforeEach
+    void configureCompany() {
+        TestCompanySettings.configure(companySettingsService, actor());
+    }
 
     @Test
     void documentsEndpointReturnsPagedAndFilteredResults() throws Exception {
@@ -77,7 +92,30 @@ class FiscalDocumentPaginationControllerTest {
         assertThat(content).allMatch(document -> document.path("type").asText().equals("SIMULATED_INVOICE"));
     }
 
-    private void createInvoice(String customer, String productCode) {
+    @Test
+    void invoiceCapabilitySeesCreditNoteExcludedByCurrentFilter() throws Exception {
+        String customer = "cliente_capability_" + UUID.randomUUID().toString().replace("-", "");
+        OrderResponse order = createInvoice(customer, uniqueCode("DOC-CAP"));
+        documentService.createCreditNote(
+                new FiscalDocumentRequests.CreateCreditNoteRequest(order.code(), "Rettifica gia registrata"),
+                actor()
+        );
+        String token = login();
+
+        mockMvc.perform(get("/api/documents")
+                        .header("X-Session-Token", token)
+                        .param("page", "0")
+                        .param("size", "1")
+                        .param("q", customer)
+                        .param("type", "SIMULATED_INVOICE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].relatedOrderCode").value(order.code()))
+                .andExpect(jsonPath("$.content[0].type").value("SIMULATED_INVOICE"))
+                .andExpect(jsonPath("$.content[0].capabilities.canCreateCreditNote").value(false));
+    }
+
+    private OrderResponse createInvoice(String customer, String productCode) {
         productService.create(new ProductRequest(
                 productCode,
                 "Prodotto paginazione documenti",
@@ -86,10 +124,10 @@ class FiscalDocumentPaginationControllerTest {
                 "TestBrand",
                 "Scheda test",
                 "",
-                5,
                 new BigDecimal("120.00"),
                 new BigDecimal("0.00")
         ));
+        inventoryService.initialBalance(productCode, 5, "Saldo iniziale paginazione documenti", "test", "Test");
         OrderResponse order = orderService.create(
                 new OrderRequests.CreateOrderRequest(
                         customer,
@@ -102,6 +140,7 @@ class FiscalDocumentPaginationControllerTest {
         orderService.confirm(order.code(), actor());
         orderService.fulfill(order.code(), actor());
         documentService.createInvoice(new FiscalDocumentRequests.CreateInvoiceRequest(order.code()), actor());
+        return order;
     }
 
     private String login() throws Exception {
@@ -109,8 +148,8 @@ class FiscalDocumentPaginationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "username": "admin",
-                                  "password": "RootSecure123!",
+                                  "username": "test_super_admin",
+                                  "password": "Test-Bootstrap-9842!",
                                   "role": "SUPER_ADMIN"
                                 }
                                 """))
@@ -122,7 +161,7 @@ class FiscalDocumentPaginationControllerTest {
     }
 
     private static AuthenticatedUser actor() {
-        return new AuthenticatedUser("admin", UserRole.SUPER_ADMIN);
+        return new AuthenticatedUser("test_super_admin", UserRole.SUPER_ADMIN);
     }
 
     private static String uniqueCode(String prefix) {

@@ -142,11 +142,9 @@ jobs:
   database-migrations:
     name: Database migrations
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     needs:
       - repository-hygiene
-    defaults:
-      run:
-        working-directory: web/backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -158,12 +156,16 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Apply Flyway migrations and validate schema
-        run: mvn -B -Dtest=DatabaseBusinessConstraintTest test
+      - name: PostgreSQL pull request gate
+        if: github.event_name != 'schedule'
+        run: sh scripts/db/verify-postgresql-suite.sh fast
+
+      - name: PostgreSQL scheduled volume gate
+        if: github.event_name == 'schedule'
+        run: sh scripts/db/verify-postgresql-suite.sh nightly
 
   prod-like-stack:
     name: Prod-like Docker stack
-    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs:
@@ -202,6 +204,7 @@ jobs:
       - backend
       - frontend
       - database-migrations
+      - prod-like-stack
     steps:
       - name: Report status
         run: echo "Gestionale CI completed successfully."

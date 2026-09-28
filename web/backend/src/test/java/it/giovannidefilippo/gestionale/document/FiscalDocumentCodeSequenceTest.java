@@ -1,5 +1,6 @@
 package it.giovannidefilippo.gestionale.document;
 
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
 import it.giovannidefilippo.gestionale.order.OrderRequests;
 import it.giovannidefilippo.gestionale.order.OrderResponse;
 import it.giovannidefilippo.gestionale.order.OrderService;
@@ -9,7 +10,12 @@ import it.giovannidefilippo.gestionale.product.ProductRequest;
 import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
+import it.giovannidefilippo.gestionale.common.PostgreSqlIntegrationTestSupport;
+import it.giovannidefilippo.gestionale.common.TestCompanySettings;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -30,7 +36,8 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-class FiscalDocumentCodeSequenceTest {
+@Tag("postgresql")
+class FiscalDocumentCodeSequenceTest extends PostgreSqlIntegrationTestSupport {
     @Autowired
     private ProductService productService;
 
@@ -39,6 +46,17 @@ class FiscalDocumentCodeSequenceTest {
 
     @Autowired
     private FiscalDocumentService documentService;
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
+    private CompanySettingsService companySettingsService;
+
+    @BeforeEach
+    void configureCompany() {
+        TestCompanySettings.configure(companySettingsService, actor());
+    }
 
     @Test
     void concurrentInvoicesReceiveUniqueSequenceCodes() throws Exception {
@@ -105,6 +123,7 @@ class FiscalDocumentCodeSequenceTest {
     private OrderResponse createOrder(int index) {
         String productCode = "SEQ-DOC-" + UUID.randomUUID().toString().substring(0, 8);
         productService.create(productRequest(productCode));
+        inventoryService.initialBalance(productCode, 2, "Saldo iniziale sequenza documenti", "test", "Test");
         String customer = "document_sequence_customer_" + index;
         OrderResponse order = orderService.create(
                 new OrderRequests.CreateOrderRequest(
@@ -128,7 +147,6 @@ class FiscalDocumentCodeSequenceTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                2,
                 new BigDecimal("100.00"),
                 new BigDecimal("0.00")
         );

@@ -29,6 +29,18 @@ public class BusinessCodeGenerator {
         return format("RES", nextValue("order_return_code_seq"));
     }
 
+    public String nextSupplierOrderCode() {
+        return format("PO", nextValue("supplier_order_code_seq"));
+    }
+
+    public String nextSupplierReceiptCode() {
+        return format("PR", nextValue("supplier_receipt_code_seq"));
+    }
+
+    public String nextPhysicalInventoryCode() {
+        return format("INV", nextValue("physical_inventory_session_code_seq"));
+    }
+
     private long nextValue(String sequenceName) {
         Number value = (Number) entityManager.createNativeQuery("select nextval('" + sequenceName + "')").getSingleResult();
         return value.longValue();

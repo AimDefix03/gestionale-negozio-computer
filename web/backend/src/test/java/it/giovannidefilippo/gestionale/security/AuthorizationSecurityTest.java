@@ -1,10 +1,12 @@
 package it.giovannidefilippo.gestionale.security;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import it.giovannidefilippo.gestionale.common.PostgreSqlIntegrationTestSupport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,7 +23,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class AuthorizationSecurityTest {
+@Tag("postgresql")
+class AuthorizationSecurityTest extends PostgreSqlIntegrationTestSupport {
     @Autowired
     private MockMvc mockMvc;
 
@@ -78,7 +81,7 @@ class AuthorizationSecurityTest {
 
     @Test
     void authenticatedUsersCannotBypassActuatorDenyRule() throws Exception {
-        String token = login("admin", "RootSecure123!", "SUPER_ADMIN");
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
 
         mockMvc.perform(get("/actuator/health").header("X-Session-Token", token))
                 .andExpect(status().isForbidden())
@@ -92,8 +95,8 @@ class AuthorizationSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "username": "admin",
-                                  "password": "RootSecure123!",
+                                  "username": "test_super_admin",
+                                  "password": "Test-Bootstrap-9842!",
                                   "role": "SUPER_ADMIN"
                                 }
                                 """))
@@ -125,10 +128,10 @@ class AuthorizationSecurityTest {
         String rotatedToken = objectMapper.readTree(response).path("token").asText();
         assertThat(rotatedToken).isNotBlank().isNotEqualTo(originalToken);
 
-        mockMvc.perform(get("/api/products").header("X-Session-Token", originalToken))
+        mockMvc.perform(get("/api/customer/catalog").header("X-Session-Token", originalToken))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_UNAUTHORIZED"));
-        mockMvc.perform(get("/api/products").header("X-Session-Token", rotatedToken))
+        mockMvc.perform(get("/api/customer/catalog").header("X-Session-Token", rotatedToken))
                 .andExpect(status().isOk());
     }
 
@@ -147,7 +150,7 @@ class AuthorizationSecurityTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("REQUEST_INVALID"));
 
-        mockMvc.perform(get("/api/products").header("X-Session-Token", token))
+        mockMvc.perform(get("/api/customer/catalog").header("X-Session-Token", token))
                 .andExpect(status().isOk());
     }
 
@@ -177,13 +180,18 @@ class AuthorizationSecurityTest {
 
     @Test
     void superAdminCanAccessAccountsAndAudit() throws Exception {
-        String token = login("admin", "RootSecure123!", "SUPER_ADMIN");
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
 
         mockMvc.perform(get("/api/accounts").header("X-Session-Token", token))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/audit").header("X-Session-Token", token))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/financial-reconciliation").header("X-Session-Token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balanced").isBoolean())
+                .andExpect(jsonPath("$.mismatchCount").isNumber());
 
         mockMvc.perform(get("/api/system/status").header("X-Session-Token", token))
                 .andExpect(status().isOk())
@@ -201,7 +209,13 @@ class AuthorizationSecurityTest {
         String token = login(username, "Client123!", "CUSTOMER");
 
         mockMvc.perform(get("/api/products").header("X-Session-Token", token))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/customer/catalog").header("X-Session-Token", token))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/dashboard").header("X-Session-Token", token))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/accounts").header("X-Session-Token", token))
                 .andExpect(status().isForbidden());
@@ -210,6 +224,9 @@ class AuthorizationSecurityTest {
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/system/status").header("X-Session-Token", token))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/financial-reconciliation").header("X-Session-Token", token))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/orders/ORD-NOT-FOUND/payments/receipts")
@@ -242,7 +259,7 @@ class AuthorizationSecurityTest {
                         .content("""
                                 {
                                   "username": "blocked_admin",
-                                  "password": "RootSecure123!",
+                                  "password": "Test-Bootstrap-9842!",
                                   "role": "ADMIN"
                                 }
                                 """))
@@ -255,8 +272,8 @@ class AuthorizationSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "username": "admin",
-                                  "password": "RootSecure123!",
+                                  "username": "test_super_admin",
+                                  "password": "Test-Bootstrap-9842!",
                                   "role": "SUPER_ADMIN"
                                 }
                                 """))
@@ -281,7 +298,7 @@ class AuthorizationSecurityTest {
 
     @Test
     void validationErrorsUseStableContract() throws Exception {
-        String token = login("admin", "RootSecure123!", "SUPER_ADMIN");
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
 
         mockMvc.perform(post("/api/products")
                         .header("X-Session-Token", token)
@@ -311,7 +328,7 @@ class AuthorizationSecurityTest {
 
     @Test
     void operationalRequestsUseSessionActorInsteadOfClientPayload() throws Exception {
-        String token = login("admin", "RootSecure123!", "SUPER_ADMIN");
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
         String code = "SEC-" + UUID.randomUUID().toString().substring(0, 8);
 
         mockMvc.perform(post("/api/products")
@@ -326,9 +343,20 @@ class AuthorizationSecurityTest {
                                   "brand": "TestBrand",
                                   "productType": "Scheda di test",
                                   "usageContext": "",
-                                  "quantity": 1,
                                   "price": 100.00,
                                   "discount": 0.00
+                                }
+                                """.formatted(code)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/inventory/initial-balance")
+                        .header("X-Session-Token", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productCode": "%s",
+                                  "quantity": 1,
+                                  "reason": "Saldo iniziale test sicurezza"
                                 }
                                 """.formatted(code)))
                 .andExpect(status().isCreated());
@@ -357,14 +385,14 @@ class AuthorizationSecurityTest {
 
         JsonNode movements = objectMapper.readTree(response);
         assertThat(movements.path("content")).anyMatch(movement -> movement.path("productCode").asText().equals(code)
-                && movement.path("actor").asText().equals("admin")
+                && movement.path("actor").asText().equals("test_super_admin")
                 && movement.path("role").asText().equals("Super admin"));
         assertThat(movements.path("content")).noneMatch(movement -> movement.path("actor").asText().equals("utente_falsificato"));
     }
 
     @Test
     void auditEventsIncludeRequestContextAndEntityType() throws Exception {
-        String token = login("admin", "RootSecure123!", "SUPER_ADMIN");
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
         String code = "AUD-" + UUID.randomUUID().toString().substring(0, 8);
         String requestId = "audit-" + UUID.randomUUID();
 
@@ -381,7 +409,6 @@ class AuthorizationSecurityTest {
                                   "brand": "TestBrand",
                                   "productType": "Scheda audit",
                                   "usageContext": "Test",
-                                  "quantity": 2,
                                   "price": 100.00,
                                   "discount": 0.00
                                 }
@@ -401,7 +428,7 @@ class AuthorizationSecurityTest {
 
     @Test
     void productsEndpointSupportsServerSidePaginationAndFilters() throws Exception {
-        String token = login("admin", "RootSecure123!", "SUPER_ADMIN");
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
         String prefix = "PAGE-" + UUID.randomUUID().toString().substring(0, 8);
 
         createProduct(token, prefix + "-A", prefix + " Alpha", "NVIDIA", "Scheda grafica");
@@ -425,7 +452,23 @@ class AuthorizationSecurityTest {
     }
 
     private void register(String username, String password, String role) throws Exception {
-        mockMvc.perform(post("/api/accounts/register")
+        if ("CUSTOMER".equals(role)) {
+            mockMvc.perform(post("/api/accounts/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "username": "%s",
+                                      "password": "%s"
+                                    }
+                                    """.formatted(username, password)))
+                    .andExpect(status().isCreated());
+            return;
+        }
+
+        String token = login("test_super_admin", "Test-Bootstrap-9842!", "SUPER_ADMIN");
+        mockMvc.perform(post("/api/accounts")
+                        .header("X-Session-Token", token)
+                        .header("X-Reauth-Password", "Test-Bootstrap-9842!")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -467,7 +510,6 @@ class AuthorizationSecurityTest {
                                   "brand": "%s",
                                   "productType": "%s",
                                   "usageContext": "Test",
-                                  "quantity": 4,
                                   "price": 100.00,
                                   "discount": 0.00
                                 }

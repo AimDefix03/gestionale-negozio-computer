@@ -1,5 +1,6 @@
 package it.giovannidefilippo.gestionale.partner;
 
+import it.giovannidefilippo.gestionale.common.ResourceConflictException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,7 +39,7 @@ class BusinessPartnerServiceTest {
         service.create(request(code, BusinessPartnerType.SUPPLIER, "Fornitore Test"), "admin", "Admin");
 
         assertThatThrownBy(() -> service.create(request(code, BusinessPartnerType.SUPPLIER, "Fornitore Duplicato"), "admin", "Admin"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ResourceConflictException.class)
                 .hasMessageContaining("codice");
     }
 

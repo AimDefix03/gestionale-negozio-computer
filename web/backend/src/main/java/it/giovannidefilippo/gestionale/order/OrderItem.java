@@ -29,6 +29,9 @@ public class OrderItem {
     @Column(nullable = false)
     private String productName;
 
+    @Column(nullable = false, length = 1200)
+    private String productDescription;
+
     @Column(nullable = false)
     private int quantity;
 
@@ -41,12 +44,17 @@ public class OrderItem {
     protected OrderItem() {
     }
 
-    OrderItem(String productCode, String productName, int quantity, BigDecimal unitPrice) {
+    OrderItem(String productCode, String productName, String productDescription, int quantity, BigDecimal unitPrice) {
         this.productCode = productCode;
         this.productName = productName;
+        this.productDescription = productDescription == null ? "" : productDescription.trim();
         this.quantity = quantity;
         this.unitPrice = unitPrice;
         this.lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+    }
+
+    OrderItem(String productCode, String productName, int quantity, BigDecimal unitPrice) {
+        this(productCode, productName, "", quantity, unitPrice);
     }
 
     void assignOrder(CustomerOrder order) {
@@ -56,6 +64,7 @@ public class OrderItem {
     public Long getId() { return id; }
     public String getProductCode() { return productCode; }
     public String getProductName() { return productName; }
+    public String getProductDescription() { return productDescription; }
     public int getQuantity() { return quantity; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public BigDecimal getLineTotal() { return lineTotal; }

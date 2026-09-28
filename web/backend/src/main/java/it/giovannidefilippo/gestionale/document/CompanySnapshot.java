@@ -12,12 +12,13 @@ record CompanySnapshot(
         String postalCode,
         String city,
         String province,
-        String countryCode
+        String countryCode,
+        String timeZone
 ) {
     static CompanySnapshot from(CompanySettingsSnapshot settings) {
         return new CompanySnapshot(
                 settings.legalName(), settings.taxCode(), settings.vatNumber(), settings.email(), settings.phone(),
-                settings.address(), settings.postalCode(), settings.city(), settings.province(), settings.countryCode()
+                settings.address(), settings.postalCode(), settings.city(), settings.province(), settings.countryCode(), settings.timeZone()
         );
     }
 
@@ -26,7 +27,7 @@ record CompanySnapshot(
                 document.getCompanySnapshotLegalName(), document.getCompanySnapshotTaxCode(), document.getCompanySnapshotVatNumber(),
                 document.getCompanySnapshotEmail(), document.getCompanySnapshotPhone(), document.getCompanySnapshotAddress(),
                 document.getCompanySnapshotPostalCode(), document.getCompanySnapshotCity(), document.getCompanySnapshotProvince(),
-                document.getCompanySnapshotCountryCode()
+                document.getCompanySnapshotCountryCode(), document.getCompanySnapshotTimeZone()
         );
     }
 }

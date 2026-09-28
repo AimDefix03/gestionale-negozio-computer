@@ -1,16 +1,21 @@
 package it.giovannidefilippo.gestionale.reporting;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record InventoryReportResponse(
-        LocalDateTime generatedAt,
+        OffsetDateTime generatedAt,
         int productCount,
         long physicalUnits,
         long reservedUnits,
         long availableUnits,
-        BigDecimal inventoryValue,
+        BigDecimal potentialRetailStockValue,
+        BigDecimal knownInventoryCostValue,
+        BigDecimal potentialGrossMarginOnCostedStock,
+        long costedUnits,
+        long uncostedUnits,
+        BigDecimal costCoveragePercentage,
         long lowStockCount,
         long outOfStockCount,
         long discontinuedCount,
@@ -29,7 +34,14 @@ public record InventoryReportResponse(
             BigDecimal price,
             BigDecimal discount,
             BigDecimal discountedPrice,
-            BigDecimal stockValue,
+            BigDecimal potentialRetailValue,
+            BigDecimal lastPurchaseCost,
+            BigDecimal averagePurchaseCost,
+            int costedQuantity,
+            int uncostedQuantity,
+            BigDecimal costCoveragePercentage,
+            BigDecimal knownInventoryCost,
+            BigDecimal potentialGrossMarginOnCostedStock,
             boolean discontinued,
             String stockStatus,
             String stockStatusLabel

@@ -1,6 +1,7 @@
 package it.giovannidefilippo.gestionale.idempotency;
 
 enum IdempotencyStatus {
-    PROCESSING,
-    COMPLETED
+    IN_PROGRESS,
+    COMPLETED,
+    FAILED_RETRYABLE
 }

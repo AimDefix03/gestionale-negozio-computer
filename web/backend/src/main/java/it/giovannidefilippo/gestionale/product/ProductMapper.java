@@ -5,6 +5,10 @@ final class ProductMapper {
     }
 
     static ProductResponse toResponse(Product product) {
+        return toResponse(product, ProductCapabilities.none());
+    }
+
+    static ProductResponse toResponse(Product product, ProductCapabilities capabilities) {
         return new ProductResponse(
                 product.getId(),
                 product.getCode(),
@@ -20,7 +24,15 @@ final class ProductMapper {
                 product.getPrice(),
                 product.getDiscount(),
                 product.getDiscountedPrice(),
-                product.isDiscontinued()
+                product.getLastPurchaseCost(),
+                product.getAveragePurchaseCost(),
+                product.getCostedQuantity(),
+                product.getUncostedQuantity(),
+                product.getCostCoveragePercentage(),
+                product.getKnownInventoryCost(),
+                product.getPotentialGrossMarginOnCostedStock(),
+                product.isDiscontinued(),
+                capabilities
         );
     }
 }

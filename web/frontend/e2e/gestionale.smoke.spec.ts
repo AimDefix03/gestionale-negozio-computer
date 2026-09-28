@@ -43,7 +43,6 @@ test('mostra un errore accessibile per credenziali non valide', async ({ page })
   await page.goto('/');
   await page.getByLabel('Username').fill(`utente_inesistente_${runId}`);
   await page.getByLabel('Password').fill('Password-Non-Valida-123!');
-  await page.getByLabel('Ruolo').selectOption('SUPER_ADMIN');
   await page.getByRole('button', { name: 'Accedi' }).click();
 
   await expect(page.getByRole('alert')).toBeVisible();
@@ -55,7 +54,7 @@ test('completa catalogo, registrazione cliente e ciclo ordine', async ({ page })
   const runtimeErrors = collectRuntimeErrors(page);
 
   await page.goto('/');
-  await login(page, adminUsername!, adminPassword!, 'SUPER_ADMIN');
+  await login(page, adminUsername!, adminPassword!);
   await openMenuEntry(page, 'Workspace', 'Catalogo prodotti');
   await expect(page.locator('.workspace-header h1')).toHaveText('Catalogo prodotti');
 
@@ -66,12 +65,24 @@ test('completa catalogo, registrazione cliente e ciclo ordine', async ({ page })
   await productForm.getByLabel('Brand').fill('Test Automation');
   await productForm.getByLabel('Tipo prodotto').fill('Scheda grafica');
   await productForm.getByLabel('Utilizzo opzionale').fill('Collaudo E2E');
-  await productForm.getByLabel('Quantita').fill('5');
   await productForm.getByLabel('Prezzo').fill('499.90');
   await productForm.getByLabel('Sconto %').fill('0');
   await productForm.getByLabel('Descrizione').fill('Prodotto creato dallo smoke test browser sullo stack reale.');
   await productForm.getByRole('button', { name: 'Crea prodotto' }).click();
+  await expect(page.getByRole('status').filter({ hasText: `Prodotto ${productCode} creato.` })).toBeVisible();
+  await expect(productForm.getByLabel('Codice')).toHaveValue('');
 
+  await openMenuEntry(page, 'Operazioni', 'Magazzino');
+  await expect(page.locator('.workspace-header h1')).toHaveText('Magazzino');
+  await page.getByLabel('Prodotto').first().selectOption(productCode);
+  await page.getByLabel('Operazione').selectOption('INITIAL_BALANCE');
+  await page.getByLabel('Giacenza iniziale').fill('5');
+  await page.getByLabel('Causale').fill('Saldo iniziale smoke test E2E');
+  await page.getByRole('button', { name: 'Registra nel ledger' }).click();
+  await expect(page.getByRole('status').filter({ hasText: `Movimento registrato per ${productCode}.` })).toBeVisible();
+  await expect(page.getByLabel('Prodotto').first()).toHaveValue('');
+
+  await openMenuEntry(page, 'Workspace', 'Catalogo prodotti');
   await page.getByLabel('Cerca prodotto').fill(productCode);
   const adminProductRow = page.getByRole('row').filter({ hasText: productCode });
   await expect(adminProductRow).toContainText(productName);
@@ -79,7 +90,7 @@ test('completa catalogo, registrazione cliente e ciclo ordine', async ({ page })
 
   await openMenuEntry(page, 'Operazioni', 'Report');
   await expect(page.locator('.workspace-header h1')).toHaveText('Report');
-  await page.getByRole('button', { name: 'Magazzino' }).click();
+  await page.getByLabel('Tipo di report').getByRole('button', { name: 'Magazzino', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Snapshot di magazzino' })).toBeVisible();
   await page.getByLabel('Cerca').fill(productCode);
   await expect(page.getByRole('row').filter({ hasText: productCode })).toContainText(productName);
@@ -93,14 +104,17 @@ test('completa catalogo, registrazione cliente e ciclo ordine', async ({ page })
 
   await page.getByRole('button', { name: 'Logout' }).click();
   await registerCustomer(page, customerUsername, customerPassword);
-  await openMenuEntry(page, 'Workspace', 'Catalogo prodotti');
+  await openMenuEntry(page, 'Operazioni', 'Nuovo ordine');
+  await expect(page.locator('.workspace-header h1')).toHaveText('Nuovo ordine');
   await page.getByLabel('Cerca prodotto').fill(productCode);
 
   const customerProductRow = page.getByRole('row').filter({ hasText: productCode });
   await expect(customerProductRow).toContainText(productName);
   await customerProductRow.getByRole('button', { name: 'Aggiungi' }).click();
-  await expect(page.getByText(`${productName} x 1`)).toBeVisible();
-  await page.getByRole('button', { name: 'Crea ordine' }).click();
+  const cartLine = page.getByRole('listitem').filter({ hasText: productName });
+  await expect(cartLine).toContainText(productName);
+  await expect(cartLine.getByRole('button', { name: `Riduci quantita ${productName}` })).toBeVisible();
+  await page.getByRole('button', { name: 'Crea bozza ordine' }).click();
 
   await expect(page.locator('.workspace-header h1')).toHaveText('Ordini');
   const orderRow = page.getByRole('row').filter({ hasText: customerUsername });
@@ -111,10 +125,9 @@ test('completa catalogo, registrazione cliente e ciclo ordine', async ({ page })
   expect(runtimeErrors).toEqual([]);
 });
 
-async function login(page: Page, username: string, password: string, role: string) {
+async function login(page: Page, username: string, password: string) {
   await page.getByLabel('Username').fill(username);
   await page.getByLabel('Password').fill(password);
-  await page.getByLabel('Ruolo').selectOption(role);
   await page.getByRole('button', { name: 'Accedi' }).click();
   await expect(page.locator('.workspace-header h1')).toHaveText('Dashboard operativa');
 }
@@ -123,14 +136,15 @@ async function registerCustomer(page: Page, username: string, password: string) 
   await page.getByRole('button', { name: 'Registrazione' }).click();
   await page.getByLabel('Username').fill(username);
   await page.getByLabel('Password').fill(password);
-  await page.getByLabel('Ruolo').selectOption('CUSTOMER');
+  await expect(page.getByLabel('Ruolo')).toHaveCount(0);
   await page.getByRole('button', { name: 'Registrati' }).click();
   await expect(page.locator('.workspace-header h1')).toHaveText('Dashboard operativa');
 }
 
 async function openMenuEntry(page: Page, menu: string, entry: string) {
-  await page.getByRole('button', { name: new RegExp(`^${menu}`) }).click();
-  await page.getByRole('button', { name: new RegExp(`^${entry}`) }).click();
+  const mainMenu = page.getByRole('region', { name: 'Menu principale' });
+  await mainMenu.getByRole('button', { name: new RegExp(`^${menu}`) }).click();
+  await mainMenu.getByRole('button', { name: new RegExp(`^${entry}`) }).click();
 }
 
 function collectRuntimeErrors(page: Page, allowExpectedHttpFailure = false) {

@@ -70,10 +70,10 @@ class ReportExportService {
         CsvBuilder csv = new CsvBuilder();
         csv.row("Report magazzino", "Generato il", DATE_TIME.format(report.generatedAt()));
         csv.row();
-        csv.row("Prodotti", "Unita fisiche", "Unita riservate", "Unita disponibili", "Valore magazzino", "Scorte basse", "Esauriti", "Disattivati");
-        csv.row(report.productCount(), report.physicalUnits(), report.reservedUnits(), report.availableUnits(), report.inventoryValue(), report.lowStockCount(), report.outOfStockCount(), report.discontinuedCount());
+        csv.row("Prodotti", "Unita fisiche", "Unita riservate", "Unita disponibili", "Valore potenziale a prezzo vendita", "Valore noto a costo", "Margine potenziale su quota valorizzata", "Unita valorizzate", "Unita senza costo", "Copertura costo %", "Scorte basse", "Esauriti", "Disattivati");
+        csv.row(report.productCount(), report.physicalUnits(), report.reservedUnits(), report.availableUnits(), report.potentialRetailStockValue(), report.knownInventoryCostValue(), report.potentialGrossMarginOnCostedStock(), report.costedUnits(), report.uncostedUnits(), report.costCoveragePercentage(), report.lowStockCount(), report.outOfStockCount(), report.discontinuedCount());
         csv.row();
-        csv.row("Codice", "Nome", "Categoria", "Brand", "Tipo", "Fisico", "Riservato", "Disponibile", "Prezzo", "Sconto %", "Prezzo netto", "Valore stock", "Stato stock", "Stato prodotto");
+        csv.row("Codice", "Nome", "Categoria", "Brand", "Tipo", "Fisico", "Riservato", "Disponibile", "Prezzo", "Sconto %", "Prezzo netto", "Valore potenziale vendita", "Ultimo costo", "Costo medio", "Quantita valorizzata", "Quantita senza costo", "Copertura costo %", "Valore noto a costo", "Margine potenziale", "Stato stock", "Stato prodotto");
         report.products().forEach(product -> csv.row(
                 product.code(),
                 product.name(),
@@ -86,7 +86,14 @@ class ReportExportService {
                 product.price(),
                 product.discount(),
                 product.discountedPrice(),
-                product.stockValue(),
+                product.potentialRetailValue(),
+                product.lastPurchaseCost(),
+                product.averagePurchaseCost(),
+                product.costedQuantity(),
+                product.uncostedQuantity(),
+                product.costCoveragePercentage(),
+                product.knownInventoryCost(),
+                product.potentialGrossMarginOnCostedStock(),
                 product.stockStatusLabel(),
                 product.discontinued() ? "Disattivato" : "Attivo"
         ));

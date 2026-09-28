@@ -1,10 +1,14 @@
-import { fetchAllPages, idempotencyHeaders, request, toQueryString } from './httpClient';
-import type { CreateOrderPayload, Order, OrderQuery, PageResponse, ReceiptPayload, ReturnRefundPayload, ReturnRequestPayload } from './types';
+import { fetchAllPages, request, requestIdempotent, toQueryString } from './httpClient';
+import type { CancellationPayload, CreateOrderPayload, FinancialReconciliation, Order, OrderOperationalDetail, OrderQuery, PageResponse, ReceiptPayload, ReturnRefundPayload, ReturnRequestPayload } from './types';
 
 const baseUrl = '/api/orders';
 
-export function fetchOrderPage(query: OrderQuery = {}): Promise<PageResponse<Order>> {
-  return request<PageResponse<Order>>(`${baseUrl}${toQueryString(query)}`);
+export function fetchOrderPage(query: OrderQuery = {}, signal?: AbortSignal): Promise<PageResponse<Order>> {
+  return request<PageResponse<Order>>(`${baseUrl}${toQueryString(query)}`, { signal });
+}
+
+export function fetchOrderDetail(orderCode: string, signal?: AbortSignal): Promise<OrderOperationalDetail> {
+  return request<OrderOperationalDetail>(`${baseUrl}/${encodeURIComponent(orderCode)}/detail`, { signal });
 }
 
 export function fetchOrders(query: OrderQuery = {}): Promise<Order[]> {
@@ -12,33 +16,30 @@ export function fetchOrders(query: OrderQuery = {}): Promise<Order[]> {
   return fetchAllPages((page, pageSize) => fetchOrderPage({ ...filters, page, size: pageSize }), size);
 }
 
+export function fetchFinancialReconciliation(signal?: AbortSignal): Promise<FinancialReconciliation> {
+  return request<FinancialReconciliation>('/api/financial-reconciliation', { signal });
+}
+
 export function createOrder(payload: CreateOrderPayload): Promise<Order> {
-  return request<Order>(baseUrl, {
+  return requestIdempotent<Order>(baseUrl, 'order-create', payload, {
     method: 'POST',
-    headers: idempotencyHeaders('order-create'),
     body: JSON.stringify(payload)
   });
 }
 
 export function confirmOrder(orderCode: string): Promise<Order> {
-  return request<Order>(`${baseUrl}/${encodeURIComponent(orderCode)}/confirm`, {
-    method: 'POST',
-    headers: idempotencyHeaders(`order-confirm-${orderCode}`)
-  });
+  const url = `${baseUrl}/${encodeURIComponent(orderCode)}/confirm`;
+  return requestIdempotent<Order>(url, 'order-confirm', { orderCode }, { method: 'POST' });
 }
 
 export function fulfillOrder(orderCode: string): Promise<Order> {
-  return request<Order>(`${baseUrl}/${encodeURIComponent(orderCode)}/fulfill`, {
-    method: 'POST',
-    headers: idempotencyHeaders(`order-fulfill-${orderCode}`)
-  });
+  const url = `${baseUrl}/${encodeURIComponent(orderCode)}/fulfill`;
+  return requestIdempotent<Order>(url, 'order-fulfill', { orderCode }, { method: 'POST' });
 }
 
-export function cancelOrder(orderCode: string): Promise<Order> {
-  return request<Order>(`${baseUrl}/${encodeURIComponent(orderCode)}/cancel`, {
-    method: 'POST',
-    headers: idempotencyHeaders(`order-cancel-${orderCode}`)
-  });
+export function cancelOrder(orderCode: string, payload: CancellationPayload): Promise<Order> {
+  const url = `${baseUrl}/${encodeURIComponent(orderCode)}/cancel`;
+  return requestIdempotent<Order>(url, 'order-cancel', { orderCode, payload }, { method: 'POST', body: JSON.stringify(payload) });
 }
 
 export function recordOrderReceipt(orderCode: string, payload: ReceiptPayload): Promise<Order> {
@@ -71,9 +72,9 @@ function returnOperation(orderCode: string, returnCode: string, action: string, 
 }
 
 function operation(url: string, scope: string, payload?: object): Promise<Order> {
-  return request<Order>(url, {
+  const intentPayload = payload ?? { operation: scope };
+  return requestIdempotent<Order>(url, scope, intentPayload, {
     method: 'POST',
-    headers: idempotencyHeaders(scope),
     ...(payload ? { body: JSON.stringify(payload) } : {})
   });
 }

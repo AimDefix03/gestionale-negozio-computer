@@ -11,11 +11,16 @@ import java.util.List;
 import java.util.Optional;
 
 interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
-    Optional<Product> findByCodeIgnoreCase(String code);
+    @Query("select product from Product product where product.codeCanonical = lower(trim(:code))")
+    Optional<Product> findByCodeIgnoreCase(@Param("code") String code);
 
-    @Lock(LockModeType.OPTIMISTIC)
-    @Query("select product from Product product where lower(product.code) = lower(:code)")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select product from Product product where product.codeCanonical = lower(trim(:code))")
     Optional<Product> findByCodeForStockAdjustment(@Param("code") String code);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select product from Product product where product.id in :ids order by product.id")
+    List<Product> findAllByIdForStockAdjustment(@Param("ids") List<Long> ids);
 
     @Query("""
             select product from Product product
@@ -42,7 +47,18 @@ interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificati
             select coalesce(sum(product.price * (100 - product.discount) / 100 * product.quantity), 0)
             from Product product
             """)
-    java.math.BigDecimal sumDiscountedInventoryValue();
+    java.math.BigDecimal sumPotentialRetailStockValue();
 
-    boolean existsByCodeIgnoreCase(String code);
+    @Query("select coalesce(sum(product.averagePurchaseCost * product.costedQuantity), 0) from Product product")
+    java.math.BigDecimal sumKnownInventoryCostValue();
+
+    @Query("select coalesce(sum((product.price * (100 - product.discount) / 100 - product.averagePurchaseCost) * product.costedQuantity), 0) from Product product")
+    java.math.BigDecimal sumPotentialGrossMarginOnCostedStock();
+
+    @Query("select coalesce(sum(product.costedQuantity), 0) from Product product")
+    long sumCostedQuantity();
+
+    @Query("select coalesce(sum(product.quantity - product.costedQuantity), 0) from Product product")
+    long sumUncostedQuantity();
+
 }

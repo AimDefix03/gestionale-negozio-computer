@@ -38,7 +38,6 @@ class SessionAuthenticationFilter extends OncePerRequestFilter {
         return path.equals("/api/accounts/login")
                 || path.equals("/api/accounts/register")
                 || path.equals("/api/accounts/password-strength")
-                || path.startsWith("/h2-console")
                 || path.equals("/actuator/health/liveness")
                 || path.equals("/actuator/health/readiness")
                 || path.equals("/actuator/prometheus")

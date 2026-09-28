@@ -7,6 +7,7 @@ import it.giovannidefilippo.gestionale.user.AuthSessionService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserPermission;
 import it.giovannidefilippo.gestionale.user.UserRole;
+import it.giovannidefilippo.gestionale.user.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,11 +28,13 @@ class OrderController {
     private final OrderService service;
     private final AuthSessionService authSessionService;
     private final IdempotencyService idempotencyService;
+    private final UserService userService;
 
-    OrderController(OrderService service, AuthSessionService authSessionService, IdempotencyService idempotencyService) {
+    OrderController(OrderService service, AuthSessionService authSessionService, IdempotencyService idempotencyService, UserService userService) {
         this.service = service;
         this.authSessionService = authSessionService;
         this.idempotencyService = idempotencyService;
+        this.userService = userService;
     }
 
     @GetMapping
@@ -44,9 +47,9 @@ class OrderController {
     ) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.VIEW_ORDERS);
         if (actor.role() == UserRole.CUSTOMER) {
-            return service.search(q, actor.username(), page, size);
+            return service.searchForAccount(q, actor.accountId(), page, size, actor);
         }
-        return service.search(q, customer, page, size);
+        return service.search(q, customer, page, size, actor);
     }
 
     @GetMapping("/customer/{customer}")
@@ -58,10 +61,19 @@ class OrderController {
             @RequestParam(required = false) String q
     ) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.VIEW_ORDERS);
-        if (actor.role() == UserRole.CUSTOMER && !actor.username().equalsIgnoreCase(customer)) {
-            throw new ForbiddenException("Puoi visualizzare solo i tuoi ordini.");
+        if (actor.role() == UserRole.CUSTOMER) {
+            return service.searchForAccount(q, actor.accountId(), page, size, actor);
         }
-        return service.search(q, customer, page, size);
+        return service.search(q, customer, page, size, actor);
+    }
+
+    @GetMapping("/{code}")
+    OrderResponse findByCode(
+            @PathVariable String code,
+            @RequestHeader(value = "X-Session-Token", required = false) String token
+    ) {
+        AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.VIEW_ORDERS);
+        return service.findByCode(code, actor);
     }
 
     @PostMapping
@@ -73,7 +85,7 @@ class OrderController {
     ) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.CREATE_ORDERS);
         String customer = actor.role() == UserRole.CUSTOMER ? actor.username() : request.customer();
-        CreateOrderIdempotencyPayload payload = new CreateOrderIdempotencyPayload(customer, request.customerCode(), request.paymentMethod(), request.items());
+        CreateOrderIdempotencyPayload payload = new CreateOrderIdempotencyPayload(actor.accountId(), customer, request.customerCode(), request.customerType(), request.customerPartnerId(), request.walkInCustomerName(), request.paymentMethod(), request.items());
         return idempotencyService.execute(idempotencyKey, actor, "POST /api/orders", payload, OrderResponse.class, HttpStatus.CREATED, () -> service.create(request, customer, actor));
     }
 
@@ -100,11 +112,12 @@ class OrderController {
     @PostMapping("/{code}/cancel")
     OrderResponse cancel(
             @PathVariable String code,
+            @Valid @RequestBody OrderOperationRequests.CancellationRequest request,
             @RequestHeader(value = "X-Session-Token", required = false) String token,
             @RequestHeader(value = IdempotencyService.HEADER_NAME, required = false) String idempotencyKey
     ) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.CANCEL_ORDERS);
-        return idempotencyService.execute(idempotencyKey, actor, "POST /api/orders/{code}/cancel", code, OrderResponse.class, HttpStatus.OK, () -> service.cancel(code, actor));
+        return idempotencyService.execute(idempotencyKey, actor, "POST /api/orders/{code}/cancel", new OperationPayload(code, request), OrderResponse.class, HttpStatus.OK, () -> service.cancel(code, request, actor));
     }
 
     @PostMapping("/{code}/payments/receipts")
@@ -116,6 +129,19 @@ class OrderController {
     ) {
         AuthenticatedUser actor = authSessionService.requirePermission(token, UserPermission.RECORD_PAYMENTS);
         return idempotencyService.execute(idempotencyKey, actor, "POST /api/orders/{code}/payments/receipts", new OperationPayload(code, request), OrderResponse.class, HttpStatus.OK, () -> service.recordReceipt(code, request, actor));
+    }
+
+    @PostMapping("/{code}/payments/reconciliation")
+    OrderResponse reconcilePayment(
+            @PathVariable String code,
+            @Valid @RequestBody OrderOperationRequests.PaymentReconciliationRequest request,
+            @RequestHeader(value = "X-Session-Token", required = false) String token,
+            @RequestHeader(value = "X-Reauth-Password", required = false) String reauthPassword,
+            @RequestHeader(value = IdempotencyService.HEADER_NAME, required = false) String idempotencyKey
+    ) {
+        AuthenticatedUser actor = authSessionService.requireSuperAdmin(token);
+        requirePasswordConfirmation(actor, reauthPassword);
+        return idempotencyService.execute(idempotencyKey, actor, "POST /api/orders/{code}/payments/reconciliation", new OperationPayload(code, request), OrderResponse.class, HttpStatus.OK, () -> service.reconcilePayment(code, request, actor));
     }
 
     @PostMapping("/{code}/returns")
@@ -181,9 +207,20 @@ class OrderController {
         return idempotencyService.execute(idempotencyKey, actor, "POST /api/orders/{code}/returns/{returnCode}/refund", new ReturnOperationPayload(code, returnCode, request), OrderResponse.class, HttpStatus.OK, () -> service.refundReturn(code, returnCode, request, actor));
     }
 
+    private void requirePasswordConfirmation(AuthenticatedUser actor, String password) {
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Conferma la password della sessione per continuare.");
+        }
+        userService.verifyPassword(actor.username(), password);
+    }
+
     private record CreateOrderIdempotencyPayload(
+            Long customerAccountId,
             String customer,
             String customerCode,
+            OrderCustomerType customerType,
+            Long customerPartnerId,
+            String walkInCustomerName,
             PaymentMethod paymentMethod,
             List<OrderRequests.CreateOrderItemRequest> items
     ) {

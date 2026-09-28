@@ -41,8 +41,8 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/h2-console/**", "/actuator/**"))
-                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/actuator/**"))
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.deny()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) -> errorWriter.write(request, response, HttpStatus.UNAUTHORIZED, ApiErrorCode.AUTH_UNAUTHORIZED, "Sessione mancante o non valida."))
@@ -50,13 +50,16 @@ class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/accounts/login", "/api/accounts/register", "/api/accounts/password-strength").permitAll()
-                        .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/actuator/**").denyAll()
                         .requestMatchers(HttpMethod.POST, "/api/accounts/logout").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/accounts/session/renew").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/products/**").hasAuthority("VIEW_CATALOG")
+                        .requestMatchers(HttpMethod.POST, "/api/accounts/me/password").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/customer/catalog/**").hasAuthority("VIEW_CATALOG")
+                        .requestMatchers(HttpMethod.GET, "/api/customer/dashboard").hasAuthority("VIEW_ORDERS")
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").hasAuthority("MANAGE_INVENTORY")
+                        .requestMatchers(HttpMethod.GET, "/api/dashboard").hasAuthority("VIEW_REPORTS")
                         .requestMatchers(HttpMethod.POST, "/api/products/**").hasAuthority("MANAGE_PRODUCTS")
                         .requestMatchers(HttpMethod.PUT, "/api/products/**").hasAuthority("MANAGE_PRODUCTS")
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasAuthority("MANAGE_PRODUCTS")

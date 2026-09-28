@@ -15,9 +15,9 @@ Se valore e percorso sono entrambi presenti, se un segreto obbligatorio manca, o
 
 Nello stack Compose il percorso raccomandato usa:
 
-- `docker-compose.secrets.yml` per la password PostgreSQL;
+- `docker-compose.secrets.yml` per le credenziali PostgreSQL separate di bootstrap, migrator, runtime, backup e restore;
 - `docker-compose.bootstrap-secret.yml` solo durante il bootstrap iniziale;
-- `GESTIONALE_DB_PASSWORD_SECRET_FILE` come file sorgente locale della password database;
+- le cinque variabili `GESTIONALE_DB_*_PASSWORD_SECRET_FILE` come file sorgente locali delle password database;
 - `GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_SECRET_FILE` come file sorgente temporaneo del bootstrap.
 
 I file sorgente devono trovarsi fuori dal controllo versione, preferibilmente fuori dal repository, e non essere inclusi in backup applicativi.
@@ -29,8 +29,12 @@ Preparare una directory locale non versionata:
 ```bash
 mkdir -p secrets
 chmod 0700 secrets
-printf '%s' 'password-database-generata' > secrets/database-password
-chmod 0444 secrets/database-password
+printf '%s' 'password-bootstrap-generata' > secrets/database-bootstrap-password
+printf '%s' 'password-migrator-generata' > secrets/database-migrator-password
+printf '%s' 'password-runtime-generata' > secrets/database-runtime-password
+printf '%s' 'password-backup-generata' > secrets/database-backup-password
+printf '%s' 'password-restore-generata' > secrets/database-restore-password
+chmod 0444 secrets/database-*-password
 ```
 
 La directory `0700` impedisce agli altri utenti host di attraversarla; il file `0444` permette ai diversi utenti non-root dei container Compose di leggerne il mount individuale, che Docker espone comunque in sola lettura. Su un orchestratore reale usare ownership e modalita fornite dal secret manager.
@@ -62,22 +66,38 @@ Dopo la creazione e la verifica del primo super admin:
 4. verificare che il relativo mount non compaia piu nel container backend;
 5. conservare l'evento operativo nel sistema di change management.
 
+## Provisioning dei ruoli database
+
+Su un database esistente, predisporre owner, migrator, runtime, backup e restore con una sessione amministrativa e conferma esplicita:
+
+```bash
+CONFIRM_DATABASE_ROLE_PROVISIONING=yes \
+ENV_FILE=/etc/gestionale/database-roles.env \
+scripts/db/provision-database-roles.sh
+```
+
+Se gli oggetti sono posseduti da una precedente utenza applicativa, configurare `GESTIONALE_DB_LEGACY_OWNER_USERNAME` dopo avere verificato il ruolo corretto. Lo script riassegna l'ownership senza cancellare dati e applica i grant minimi.
+
 ## Rotazione password database
 
-La procedura preferita usa una nuova identita database, quando il provider e il modello di ownership lo consentono:
+1. generare cinque nuove password indipendenti nel secret manager;
+2. fermare temporaneamente backend, backup e restore drill oppure pianificare un rolling restart controllato;
+3. predisporre un file ambiente protetto con le nuove password o i relativi percorsi `_FILE`;
+4. eseguire la rotazione con conferma esplicita:
 
-1. creare una nuova credenziale nel secret manager senza revocare quella corrente;
-2. creare o preparare un nuovo ruolo PostgreSQL con i privilegi minimi necessari a runtime e alle migrazioni previste;
-3. verificare separatamente permessi su schema, tabelle, sequenze e Flyway;
-4. distribuire la nuova versione del secret e aggiornare username e riferimento file del backend;
-5. effettuare un rolling restart e attendere readiness `UP`;
-6. verificare login, lettura catalogo e una transazione controllata;
-7. monitorare errori di autenticazione e connessioni database;
-8. revocare la vecchia credenziale solo dopo la finestra di osservazione;
-9. chiudere le vecchie connessioni residue in una finestra controllata;
-10. registrare versione, data, operatore, esito e rollback disponibile senza salvare il valore.
+```bash
+CONFIRM_DATABASE_ROLE_ROTATION=yes \
+ENV_FILE=/etc/gestionale/database-roles-next.env \
+scripts/db/rotate-database-role-passwords.sh
+```
 
-La rotazione in-place della password dello stesso ruolo puo interrompere nuove connessioni durante il riciclo del pool. Va pianificata come change con finestra di manutenzione o verificata sul provider specifico.
+5. aggiornare i cinque secret montati nei workload;
+6. riavviare PostgreSQL solo se richiesto dall'infrastruttura, poi backend e job operativi;
+7. attendere readiness `UP` e verificare Flyway, login, lettura catalogo, una transazione controllata, backup e restore drill;
+8. verificare che le vecchie password siano rifiutate e chiudere le connessioni residue nella finestra approvata;
+9. registrare versione, data, operatore ed esito senza conservare i valori.
+
+La prova isolata `scripts/db/verify-database-least-privilege.sh` ruota tutte le credenziali e verifica che quelle precedenti non consentano nuove connessioni. La rotazione in-place puo interrompere nuove connessioni durante il riciclo del pool e va sempre gestita come change operativo.
 
 ## Rollback
 

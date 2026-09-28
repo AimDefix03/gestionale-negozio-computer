@@ -7,6 +7,7 @@ import it.giovannidefilippo.gestionale.common.PageRequests;
 import it.giovannidefilippo.gestionale.common.PageResponse;
 import it.giovannidefilippo.gestionale.common.ResourceConflictException;
 import it.giovannidefilippo.gestionale.common.TimeProvider;
+import it.giovannidefilippo.gestionale.company.CompanySettingsService;
 import it.giovannidefilippo.gestionale.order.CustomerOrder;
 import it.giovannidefilippo.gestionale.order.OrderItem;
 import it.giovannidefilippo.gestionale.order.OrderService;
@@ -16,6 +17,7 @@ import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -38,14 +42,16 @@ public class FiscalDocumentService {
     private final AuditService auditService;
     private final DocumentNumberService documentNumberService;
     private final TimeProvider timeProvider;
+    private final CompanySettingsService companySettingsService;
 
-    FiscalDocumentService(FiscalDocumentRepository repository, OrderService orderService, BusinessPartnerService partnerService, AuditService auditService, DocumentNumberService documentNumberService, TimeProvider timeProvider) {
+    FiscalDocumentService(FiscalDocumentRepository repository, OrderService orderService, BusinessPartnerService partnerService, AuditService auditService, DocumentNumberService documentNumberService, TimeProvider timeProvider, CompanySettingsService companySettingsService) {
         this.repository = repository;
         this.orderService = orderService;
         this.partnerService = partnerService;
         this.auditService = auditService;
         this.documentNumberService = documentNumberService;
         this.timeProvider = timeProvider;
+        this.companySettingsService = companySettingsService;
     }
 
     public List<FiscalDocumentResponse> findAll() {
@@ -56,10 +62,18 @@ public class FiscalDocumentService {
     }
 
     public PageResponse<FiscalDocumentResponse> search(String q, FiscalDocumentType type, int page, int size) {
-        return PageResponse.from(repository.findAll(
+        Page<FiscalDocument> documents = repository.findAll(
                 specification(q, type),
                 PageRequests.of(page, size, Sort.by("createdAt").descending())
-        ).map(FiscalDocumentResponse::from));
+        );
+        Set<String> creditedOrders = creditedOrderCodes(documents.getContent());
+        return PageResponse.from(documents.map(document -> FiscalDocumentResponse.from(
+                document,
+                new FiscalDocumentCapabilities(
+                        document.getType() == FiscalDocumentType.SIMULATED_INVOICE
+                                && !creditedOrders.contains(document.getRelatedOrderCode())
+                )
+        )));
     }
 
     @Transactional
@@ -77,7 +91,7 @@ public class FiscalDocumentService {
                 "Esiste già una fattura simulata per questo ordine."
         );
         auditService.record(actor.username(), actor.roleLabel(), "CREATE_DOCUMENT", document.getCode(), "Fattura simulata generata da ordine " + order.getCode() + " - totale " + order.getTotal(), AuditCategory.DOCUMENT, AuditSeverity.WARNING, "FISCAL_DOCUMENT");
-        return FiscalDocumentResponse.from(document);
+        return FiscalDocumentResponse.from(document, new FiscalDocumentCapabilities(true));
     }
 
     @Transactional
@@ -95,6 +109,34 @@ public class FiscalDocumentService {
         );
         auditService.record(actor.username(), actor.roleLabel(), "CREATE_DOCUMENT", document.getCode(), "Nota credito simulata generata da ordine " + order.getCode() + " - motivo " + request.reason().trim(), AuditCategory.DOCUMENT, AuditSeverity.CRITICAL, "FISCAL_DOCUMENT");
         return FiscalDocumentResponse.from(document);
+    }
+
+    public DocumentOrderCapabilities capabilitiesForOrder(String orderCode, AuthenticatedUser actor) {
+        CustomerOrder order = orderService.requireOrder(orderCode);
+        boolean hasInvoice = repository.findByRelatedOrderCodeIgnoreCaseAndType(order.getCode(), FiscalDocumentType.SIMULATED_INVOICE).isPresent();
+        boolean hasCreditNote = repository.findByRelatedOrderCodeIgnoreCaseAndType(order.getCode(), FiscalDocumentType.SIMULATED_CREDIT_NOTE).isPresent();
+        boolean canManage = actor.hasPermission(it.giovannidefilippo.gestionale.user.UserPermission.MANAGE_DOCUMENTS);
+        boolean companyReady = companySettingsService.current().configured();
+        return new DocumentOrderCapabilities(
+                canManage && companyReady && order.isFulfilled() && !hasInvoice,
+                canManage && companyReady && hasInvoice && !hasCreditNote,
+                hasInvoice,
+                hasCreditNote
+        );
+    }
+
+    private Set<String> creditedOrderCodes(List<FiscalDocument> documents) {
+        List<String> invoiceOrderCodes = documents.stream()
+                .filter(document -> document.getType() == FiscalDocumentType.SIMULATED_INVOICE)
+                .map(FiscalDocument::getRelatedOrderCode)
+                .distinct()
+                .toList();
+        if (invoiceOrderCodes.isEmpty()) {
+            return Set.of();
+        }
+        return repository.findRelatedOrderCodesByTypeAndRelatedOrderCodeIn(FiscalDocumentType.SIMULATED_CREDIT_NOTE, invoiceOrderCodes)
+                .stream()
+                .collect(Collectors.toSet());
     }
 
     private FiscalDocument saveUniqueDocument(FiscalDocument document, String duplicateMessage) {

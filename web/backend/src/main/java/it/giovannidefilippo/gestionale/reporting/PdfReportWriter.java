@@ -77,14 +77,17 @@ class PdfReportWriter {
                     {"Unita fisiche", String.valueOf(report.physicalUnits())},
                     {"Unita riservate", String.valueOf(report.reservedUnits())},
                     {"Unita disponibili", String.valueOf(report.availableUnits())},
-                    {"Valore magazzino", money(report.inventoryValue())},
+                    {"Valore potenziale a prezzo vendita", money(report.potentialRetailStockValue())},
+                    {"Valore noto a costo", money(report.knownInventoryCostValue())},
+                    {"Margine potenziale valorizzato", money(report.potentialGrossMarginOnCostedStock())},
+                    {"Copertura costo", report.costCoveragePercentage() + "%"},
                     {"Scorte basse", String.valueOf(report.lowStockCount())},
                     {"Esauriti", String.valueOf(report.outOfStockCount())},
                     {"Disattivati", String.valueOf(report.discontinuedCount())}
             }));
             document.add(spacer());
-            PdfPTable products = table(new float[]{1.05f, 1.8f, 1.05f, 1.15f, 1.35f, .7f, .7f, .7f, 1f, 1.1f, 1f},
-                    "Codice", "Nome", "Categoria", "Brand", "Tipo", "Fisico", "Ris.", "Disp.", "Prezzo netto", "Valore stock", "Stato");
+            PdfPTable products = table(new float[]{1.05f, 1.8f, 1.05f, 1.15f, 1.35f, .7f, .7f, .7f, 1f, 1f, 1f, .8f, 1f},
+                    "Codice", "Nome", "Categoria", "Brand", "Tipo", "Fisico", "Ris.", "Disp.", "Prezzo netto", "Costo medio", "Valore costo", "Copertura", "Stato");
             report.products().forEach(product -> row(products,
                     product.code(),
                     product.name(),
@@ -95,7 +98,9 @@ class PdfReportWriter {
                     String.valueOf(product.reservedQuantity()),
                     String.valueOf(product.availableQuantity()),
                     money(product.discountedPrice()),
-                    money(product.stockValue()),
+                    optionalMoney(product.averagePurchaseCost()),
+                    money(product.knownInventoryCost()),
+                    product.costCoveragePercentage() + "%",
                     product.discontinued() ? "Disattivato" : product.stockStatusLabel()));
             document.add(products);
             close(document, report.generatedAt());
@@ -120,7 +125,7 @@ class PdfReportWriter {
         return document;
     }
 
-    private static void close(Document document, java.time.LocalDateTime generatedAt) throws DocumentException {
+    private static void close(Document document, java.time.OffsetDateTime generatedAt) throws DocumentException {
         Paragraph footer = new Paragraph("Report gestionale interno | Generato il " + DATE_TIME.format(generatedAt), font(8, Font.NORMAL, Color.GRAY));
         footer.setSpacingBefore(12);
         footer.setAlignment(Element.ALIGN_RIGHT);
@@ -196,5 +201,9 @@ class PdfReportWriter {
 
     private static String money(BigDecimal value) {
         return MONEY.format(value);
+    }
+
+    private static String optionalMoney(BigDecimal value) {
+        return value == null ? "-" : money(value);
     }
 }

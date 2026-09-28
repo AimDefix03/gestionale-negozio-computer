@@ -47,6 +47,9 @@ class CompanySettings {
     @Column(nullable = false, length = 2)
     private String countryCode;
 
+    @Column(nullable = false, length = 64)
+    private String timeZone;
+
     @Column(nullable = false, precision = 5, scale = 4)
     private BigDecimal defaultVatRate;
 
@@ -82,6 +85,7 @@ class CompanySettings {
         city = optional(request.city());
         province = optional(request.province()).toUpperCase();
         countryCode = optional(request.countryCode()).toUpperCase();
+        timeZone = request.timeZone().trim();
         defaultVatRate = request.defaultVatRate().stripTrailingZeros();
         invoicePrefix = request.invoicePrefix().trim().toUpperCase();
         creditNotePrefix = request.creditNotePrefix().trim().toUpperCase();
@@ -93,12 +97,12 @@ class CompanySettings {
     CompanySettingsSnapshot snapshot() {
         return new CompanySettingsSnapshot(
                 legalName, taxCode, vatNumber, email, phone, address, postalCode, city, province,
-                countryCode, defaultVatRate, invoicePrefix, creditNotePrefix, numberPadding
+                countryCode, timeZone, defaultVatRate, invoicePrefix, creditNotePrefix, numberPadding
         );
     }
 
     boolean isConfigured() {
-        return !legalName.isBlank() && (!taxCode.isBlank() || !vatNumber.isBlank());
+        return snapshot().isDocumentReady();
     }
 
     Integer getId() { return id; }
@@ -112,6 +116,7 @@ class CompanySettings {
     String getCity() { return city; }
     String getProvince() { return province; }
     String getCountryCode() { return countryCode; }
+    String getTimeZone() { return timeZone; }
     BigDecimal getDefaultVatRate() { return defaultVatRate; }
     String getInvoicePrefix() { return invoicePrefix; }
     String getCreditNotePrefix() { return creditNotePrefix; }

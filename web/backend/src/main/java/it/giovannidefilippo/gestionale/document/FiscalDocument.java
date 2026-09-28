@@ -87,6 +87,9 @@ public class FiscalDocument {
     @Column(nullable = false, length = 2)
     private String companySnapshotCountryCode;
 
+    @Column(nullable = false, length = 64)
+    private String companySnapshotTimeZone;
+
     @Column(nullable = false)
     private String customerSnapshotCode;
 
@@ -165,6 +168,7 @@ public class FiscalDocument {
         this.companySnapshotCity = companySnapshot.city();
         this.companySnapshotProvince = companySnapshot.province();
         this.companySnapshotCountryCode = companySnapshot.countryCode();
+        this.companySnapshotTimeZone = companySnapshot.timeZone();
         this.customerSnapshotCode = customerSnapshot.code();
         this.customerSnapshotName = customerSnapshot.name();
         this.customerSnapshotTaxCode = customerSnapshot.taxCode();
@@ -210,6 +214,7 @@ public class FiscalDocument {
     public String getCompanySnapshotCity() { return companySnapshotCity; }
     public String getCompanySnapshotProvince() { return companySnapshotProvince; }
     public String getCompanySnapshotCountryCode() { return companySnapshotCountryCode; }
+    public String getCompanySnapshotTimeZone() { return companySnapshotTimeZone; }
     public String getCustomerSnapshotCode() { return customerSnapshotCode; }
     public String getCustomerSnapshotName() { return customerSnapshotName; }
     public String getCustomerSnapshotTaxCode() { return customerSnapshotTaxCode; }

@@ -1,10 +1,13 @@
 package it.giovannidefilippo.gestionale.order;
 
+import it.giovannidefilippo.gestionale.inventory.InventoryService;
 import it.giovannidefilippo.gestionale.product.ProductCategory;
 import it.giovannidefilippo.gestionale.product.ProductRequest;
 import it.giovannidefilippo.gestionale.product.ProductService;
 import it.giovannidefilippo.gestionale.user.AuthenticatedUser;
 import it.giovannidefilippo.gestionale.user.UserRole;
+import it.giovannidefilippo.gestionale.common.PostgreSqlIntegrationTestSupport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,12 +28,16 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-class OrderCodeSequenceTest {
+@Tag("postgresql")
+class OrderCodeSequenceTest extends PostgreSqlIntegrationTestSupport {
     @Autowired
     private ProductService productService;
 
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private InventoryService inventoryService;
 
     @Test
     void concurrentOrdersReceiveUniqueSequenceCodes() throws Exception {
@@ -39,6 +46,7 @@ class OrderCodeSequenceTest {
         for (int index = 0; index < orders; index++) {
             String code = "SEQ-ORD-" + UUID.randomUUID().toString().substring(0, 8);
             productService.create(productRequest(code));
+            inventoryService.initialBalance(code, 2, "Saldo iniziale sequenza ordini", "test", "Test");
             productCodes.add(code);
         }
 
@@ -93,7 +101,6 @@ class OrderCodeSequenceTest {
                 "TestBrand",
                 "Scheda di test",
                 "",
-                2,
                 new BigDecimal("100.00"),
                 new BigDecimal("0.00")
         );

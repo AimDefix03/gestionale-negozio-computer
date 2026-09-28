@@ -22,7 +22,8 @@ class ConfigurationTemplateTest {
         String gitignore = Files.readString(Path.of("../../.gitignore"));
 
         assertThat(backendExample)
-                .contains("GESTIONALE_DB_PASSWORD_FILE=/run/secrets/gestionale_db_password")
+                .contains("GESTIONALE_DB_RUNTIME_PASSWORD_FILE=/run/secrets/gestionale_db_runtime_password")
+                .contains("GESTIONALE_DB_MIGRATOR_PASSWORD_FILE=/run/secrets/gestionale_db_migrator_password")
                 .contains("GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_FILE=/run/secrets/gestionale_bootstrap_password")
                 .contains("GESTIONALE_SECURITY_SESSION_DURATION_MINUTES=45")
                 .contains("GESTIONALE_SECURITY_SESSION_IDLE_TIMEOUT_MINUTES=30")
@@ -34,7 +35,11 @@ class ConfigurationTemplateTest {
         assertThat(frontendExample).doesNotContain("=");
 
         assertThat(dockerExample)
-                .contains("GESTIONALE_DB_PASSWORD_SECRET_FILE=./secrets/database-password")
+                .contains("GESTIONALE_DB_BOOTSTRAP_PASSWORD_SECRET_FILE=./secrets/database-bootstrap-password")
+                .contains("GESTIONALE_DB_MIGRATOR_PASSWORD_SECRET_FILE=./secrets/database-migrator-password")
+                .contains("GESTIONALE_DB_RUNTIME_PASSWORD_SECRET_FILE=./secrets/database-runtime-password")
+                .contains("GESTIONALE_DB_BACKUP_PASSWORD_SECRET_FILE=./secrets/database-backup-password")
+                .contains("GESTIONALE_DB_RESTORE_PASSWORD_SECRET_FILE=./secrets/database-restore-password")
                 .contains("GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD_SECRET_FILE=./secrets/bootstrap-super-admin-password")
                 .contains("GESTIONALE_SECURITY_SESSION_DURATION_MINUTES=45")
                 .contains("GESTIONALE_SECURITY_SESSION_IDLE_TIMEOUT_MINUTES=30")
@@ -52,8 +57,10 @@ class ConfigurationTemplateTest {
                 .doesNotContain("gestionale_dev_password");
 
         assertThat(dockerSecrets)
-                .contains("/run/secrets/gestionale_db_password")
-                .contains("GESTIONALE_DB_PASSWORD_SECRET_FILE")
+                .contains("/run/secrets/gestionale_db_runtime_password")
+                .contains("/run/secrets/gestionale_db_migrator_password")
+                .contains("GESTIONALE_DB_RUNTIME_PASSWORD_SECRET_FILE")
+                .contains("GESTIONALE_DB_RESTORE_PASSWORD_SECRET_FILE")
                 .doesNotContain("replace-with-prodlike-database-password");
 
         assertThat(bootstrapSecret)
@@ -66,6 +73,7 @@ class ConfigurationTemplateTest {
         assertThat(prodLikeCompose.split("- ALL", -1)).hasSize(5);
         assertThat(prodLikeCompose)
                 .contains("/var/run/postgresql:rw,noexec,nosuid,nodev")
+                .contains("127.0.0.1:${GESTIONALE_POSTGRES_PORT:-5433}:5432")
                 .contains("${GESTIONALE_FRONTEND_PORT:-8081}:8080")
                 .contains("prom/prometheus:v3.13.1")
                 .contains("127.0.0.1:${GESTIONALE_PROMETHEUS_PORT:-9091}:9090");
@@ -74,7 +82,9 @@ class ConfigurationTemplateTest {
         assertThat(frontendDockerfile)
                 .contains("USER nginx")
                 .contains("EXPOSE 8080");
-        assertThat(postgresDockerfile).contains("USER postgres");
+        assertThat(postgresDockerfile)
+                .contains("USER postgres")
+                .contains("10-create-application-roles.sh");
 
         assertThat(gitignore)
                 .contains(".env")

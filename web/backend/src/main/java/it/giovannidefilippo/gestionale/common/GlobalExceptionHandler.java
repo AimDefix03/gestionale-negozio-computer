@@ -1,6 +1,7 @@
 package it.giovannidefilippo.gestionale.common;
 
 import it.giovannidefilippo.gestionale.idempotency.IdempotencyConflictException;
+import it.giovannidefilippo.gestionale.idempotency.IdempotencyInProgressException;
 import it.giovannidefilippo.gestionale.system.ApiErrorMonitor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.persistence.OptimisticLockException;
@@ -107,6 +108,13 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> handleIdempotencyConflict(IdempotencyConflictException exception, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(error(HttpStatus.CONFLICT, ApiErrorCode.IDEMPOTENCY_CONFLICT, exception.getMessage(), List.of(), request));
+    }
+
+    @ExceptionHandler(IdempotencyInProgressException.class)
+    ResponseEntity<ApiError> handleIdempotencyInProgress(IdempotencyInProgressException exception, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header("Retry-After", "1")
+                .body(error(HttpStatus.CONFLICT, ApiErrorCode.IDEMPOTENCY_IN_PROGRESS, exception.getMessage(), List.of(), request));
     }
 
     @ExceptionHandler(Exception.class)
