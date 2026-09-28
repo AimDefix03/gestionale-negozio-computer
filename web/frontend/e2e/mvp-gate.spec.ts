@@ -19,6 +19,17 @@ type Product = {
   availableQuantity: number;
 };
 
+type PhysicalInventorySession = {
+  id: number;
+  code: string;
+  status: 'OPEN' | 'SUBMITTED' | 'APPROVED' | 'CANCELED';
+  items: Array<{
+    id: number;
+    productCode: string;
+    differenceQuantity: number | null;
+  }>;
+};
+
 type PaymentTransaction = {
   type: 'RECEIPT' | 'REFUND' | 'REVERSAL' | 'RECONCILIATION';
   amount: number;
@@ -65,6 +76,7 @@ const firstProductName = `Componente E2E A ${suffix}`;
 const secondProductCode = `E2E-B-${suffix}`;
 const secondProductName = `Componente E2E B ${suffix}`;
 
+let adminToken = '';
 let employeeToken = '';
 let fulfilledOrder: Order;
 let canceledOrder: Order;
@@ -81,6 +93,7 @@ test('super admin crea dipendente', async ({ page }) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await page.goto('/');
   const adminSession = await login(page, adminUsername!, adminPassword!);
+  adminToken = adminSession.token;
   expect(adminSession.user.role).toBe('SUPER_ADMIN');
 
   await openMenuEntry(page, 'Amministrazione', 'Account');
@@ -99,7 +112,7 @@ test('super admin crea dipendente', async ({ page }) => {
   expect(runtimeErrors).toEqual([]);
 });
 
-test('dipendente crea cliente e vendita, poi completa carico rettifica riserva ed evasione', async ({ page }) => {
+test('dipendente crea cliente e vendita, poi completa carico inventario fisico riserva ed evasione', async ({ page }) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await page.goto('/');
   const session = await login(page, employeeUsername, employeePassword);
@@ -113,8 +126,8 @@ test('dipendente crea cliente e vendita, poi completa carico rettifica riserva e
   await openMenuEntry(page, 'Operazioni', 'Magazzino');
   await recordInventoryMovement(page, firstProductCode, 'INITIAL_BALANCE', '1', 'Saldo iniziale gate MVP');
   await recordInventoryMovement(page, firstProductCode, 'LOAD', '8', 'Carico fornitura gate MVP');
-  await recordInventoryMovement(page, firstProductCode, 'ADJUSTMENT', '1', 'Rettifica inventario gate MVP');
   await recordInventoryMovement(page, secondProductCode, 'INITIAL_BALANCE', '6', 'Saldo iniziale seconda riga gate MVP');
+  await applyPhysicalInventoryCount(page, firstProductCode, 10);
 
   const preparedProduct = await apiGet<Product>(page, employeeToken, `/api/products/${encodeURIComponent(firstProductCode)}`);
   expect(preparedProduct).toMatchObject({ quantity: 10, reservedQuantity: 0, availableQuantity: 10 });
@@ -346,21 +359,56 @@ async function createProduct(page: Page, code: string, name: string, price: stri
   await expect(form.getByLabel('Codice', { exact: true })).toHaveValue('');
 }
 
-async function recordInventoryMovement(page: Page, code: string, operation: string, quantity: string, reason: string) {
+async function recordInventoryMovement(page: Page, code: string, operation: 'INITIAL_BALANCE' | 'LOAD' | 'UNLOAD', quantity: string, reason: string) {
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Registra nel ledger' }) });
   await form.getByLabel('Prodotto').selectOption(code);
   await form.getByLabel('Operazione').selectOption(operation);
-  const quantityLabel = operation === 'INITIAL_BALANCE' ? 'Giacenza iniziale' : operation === 'ADJUSTMENT' ? 'Variazione (+/-)' : 'Quantita';
+  const quantityLabel = operation === 'INITIAL_BALANCE' ? 'Giacenza iniziale' : 'Quantita';
   await form.getByLabel(quantityLabel).fill(quantity);
   await form.getByLabel('Causale').fill(reason);
   const path = operation === 'INITIAL_BALANCE'
     ? /^\/api\/inventory\/initial-balance$/
-    : operation === 'ADJUSTMENT'
-      ? /^\/api\/inventory\/adjustments$/
-      : /^\/api\/inventory\/movements$/;
+    : /^\/api\/inventory\/movements$/;
   const responsePromise = waitForApiResponse(page, 'POST', path);
   await form.getByRole('button', { name: 'Registra nel ledger' }).click();
   await readJson(await responsePromise);
+}
+
+async function applyPhysicalInventoryCount(page: Page, code: string, countedQuantity: number) {
+  await page.getByRole('button', { name: 'Nuovo inventario' }).click();
+  const createForm = page.locator('form.physical-inventory-create');
+  await createForm.getByLabel('Motivo del conteggio').fill('Verifica fisica gate MVP');
+  await createForm.getByLabel('Prodotti').selectOption(code);
+
+  const createPromise = waitForApiResponse(page, 'POST', /^\/api\/inventory\/counts$/);
+  await createForm.getByRole('button', { name: 'Apri sessione' }).click();
+  const session = await readJson<PhysicalInventorySession>(await createPromise);
+  const item = session.items.find((candidate) => candidate.productCode === code);
+  expect(item).toBeDefined();
+
+  const itemCard = page.locator('.physical-inventory-item').filter({ hasText: code });
+  await expect(itemCard).toBeVisible();
+  await itemCard.getByLabel('Nota').fill('Conteggio fisico eseguito dal dipendente E2E');
+  const countedQuantityInput = itemCard.getByLabel(/Quantit. contata/);
+  await countedQuantityInput.fill(String(countedQuantity));
+  await expect(countedQuantityInput).toHaveValue(String(countedQuantity));
+  const countPromise = waitForApiResponse(page, 'PUT', new RegExp(`^/api/inventory/counts/${session.id}/items/${item!.id}$`));
+  await itemCard.getByRole('button', { name: 'Registra' }).click();
+  const counted = await readJson<PhysicalInventorySession>(await countPromise);
+  expect(counted.items.find((candidate) => candidate.id === item!.id)?.differenceQuantity).toBe(1);
+
+  const submitPromise = waitForApiResponse(page, 'POST', new RegExp(`^/api/inventory/counts/${session.id}/submit$`));
+  await page.getByRole('button', { name: 'Invia per approvazione' }).click();
+  expect((await readJson<PhysicalInventorySession>(await submitPromise)).status).toBe('SUBMITTED');
+
+  const approvalResponse = await page.request.post(`/api/inventory/counts/${session.id}/approve`, {
+    headers: {
+      ...sessionHeaders(adminToken),
+      'Idempotency-Key': `physical-inventory-approve-${randomUUID()}`
+    },
+    data: { reason: 'Differenza verificata dal super admin E2E' }
+  });
+  expect((await readJson<PhysicalInventorySession>(approvalResponse)).status).toBe('APPROVED');
 }
 
 async function createAssistedOrder(page: Page, firstProductQuantity: number, includeSecondProduct: boolean): Promise<Order> {
@@ -385,7 +433,7 @@ async function createAssistedOrder(page: Page, firstProductQuantity: number, inc
   const responsePromise = waitForApiResponse(page, 'POST', /^\/api\/orders$/);
   await page.getByRole('button', { name: 'Crea bozza ordine' }).click();
   const order = await readJson<Order>(await responsePromise);
-  await expect(page.locator('.workspace-header h1')).toHaveText('Ordini');
+  await expect(page.locator('.workspace-header h1')).toHaveText('Ordini cliente');
   await expect(page.getByRole('row').filter({ hasText: order.code })).toBeVisible();
   return order;
 }

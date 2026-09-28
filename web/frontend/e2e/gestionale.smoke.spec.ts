@@ -116,7 +116,7 @@ test('completa catalogo, registrazione cliente e ciclo ordine', async ({ page })
   await expect(cartLine.getByRole('button', { name: `Riduci quantita ${productName}` })).toBeVisible();
   await page.getByRole('button', { name: 'Crea bozza ordine' }).click();
 
-  await expect(page.locator('.workspace-header h1')).toHaveText('Ordini');
+  await expect(page.locator('.workspace-header h1')).toHaveText('Ordini cliente');
   const orderRow = page.getByRole('row').filter({ hasText: customerUsername });
   await expect(orderRow).toContainText('Bozza');
   await orderRow.getByRole('button', { name: 'Conferma' }).click();

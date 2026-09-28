@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import type { PhysicalInventoryItem, ProductLookup } from '../../api';
 import PaginationControls from '../../components/PaginationControls';
 import { errorMessage } from '../../utils/errors';
@@ -20,17 +20,27 @@ export default function PhysicalInventoryPanel({ flow, products, busy }: Props) 
   const [productCodes, setProductCodes] = useState<string[]>([]);
   const [decisionReason, setDecisionReason] = useState('');
   const [counts, setCounts] = useState<Record<number, CountDraft>>({});
+  const draftSessionId = useRef<number | null>(null);
 
   useEffect(() => {
     if (!flow.detail) {
+      draftSessionId.current = null;
       setCounts({});
       return;
     }
-    setCounts(Object.fromEntries(flow.detail.items.map((item) => [item.id, {
-      quantity: String(item.countedQuantity ?? item.theoreticalQuantitySnapshot),
-      note: item.countNote ?? ''
-    }])));
-    setDecisionReason(flow.detail.approvalReason ?? flow.detail.cancellationReason ?? '');
+    const detail = flow.detail;
+    const sessionChanged = draftSessionId.current !== detail.id;
+    draftSessionId.current = detail.id;
+    setCounts((current) => Object.fromEntries(detail.items.map((item) => [item.id,
+      !sessionChanged && current[item.id]
+        ? current[item.id]
+        : {
+            quantity: String(item.countedQuantity ?? item.theoreticalQuantitySnapshot),
+            note: item.countNote ?? ''
+          }
+    ])));
+    const persistedDecisionReason = detail.approvalReason ?? detail.cancellationReason ?? '';
+    setDecisionReason((current) => sessionChanged || persistedDecisionReason ? persistedDecisionReason : current);
   }, [flow.detail]);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
