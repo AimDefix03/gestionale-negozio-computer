@@ -2,20 +2,21 @@
 
 ## Stato generale
 
-- Current step: consolidamento Git degli Step 0.2-4.3, IN_PROGRESS; correzione avvio a freddo SCA remoto; Step 4.4 non iniziato
+- Current step: consolidamento Git degli Step 0.2-4.3, COMPLETED sul commit applicativo `a3407d3`; Step 4.4 non iniziato
+- Next eligible step: 4.4, Scorta minima e proposte di riordino; richiede autorizzazione del prossimo step
 - Last completed step nel repository reale: 4.3, Inventario fisico e rettifiche approvate
 - Last update: 2026-10-12
 - Roadmap completion: 32/48 step completati, sincronizzati e verificati nel repository reale (66.7%)
 - Il 66.7% misura gli step completati, non la prontezza produttiva. La precedente stima di maturita 95-97% non e supportata dai gate ancora aperti e viene ritirata.
-- Gate C rivalidato localmente e CI remota verde su `a56df5f`; scansione dipendenze backend remota ancora pendente
+- Gate C rivalidato localmente; CI e sicurezza remote verdi su `a3407d3`, inclusa scansione dipendenze backend
 - Open P0: nessuno
-- Open P1: F-17, F-18, F-19; F-04 rivalidato localmente, conferma remota ancora pendente
+- Open P1: F-17, F-18, F-19; F-04 rivalidato localmente e confermato dal gate SCA remoto
 - Open P2: F-29, F-30
 - Open P3: nessuno
 
 ## Consolidamento 2026-10-11
 
-- Stato: IN_PROGRESS. Correzioni pubblicate, chiusura subordinata all'esito SCA remoto. Nessuna nuova funzionalita dello Step 4.4.
+- Stato: COMPLETED sul commit applicativo `a3407d3`. Correzioni pubblicate, CI e sicurezza remote verificate. Nessuna nuova funzionalita dello Step 4.4; nessun merge o deploy.
 - Checkpoint `2d783d5`, documentazione `76b1843`, parser download `622efb7` e flusso inventario `f330b00` gia pubblicati su `miglioramenti-gestionale`, PR #2 in draft.
 - La CI di `f330b00` ha evidenziato un contratto E2E obsoleto, un verificatore header non portabile su Linux e rilevazioni SCA backend. I 19 test browser remoti erano passati, ma questo non rendeva verde il gate prod-like completo.
 - Contratto aggiornato al conteggio con invio e approvazione separata; regressioni frontend su conservazione della bozza al refresh e isolamento tra sessioni.
@@ -34,13 +35,18 @@
 - Diagnosi successiva autorizzata: annullato il run `38228668503` dopo oltre due ore e acquisiti i log. Il runner, privo di API key NVD, era ancora nel download iniziale di 140.000/404.465 record (35%), prima dell'analisi. Il run annullato NON e superato.
 - Correzione circoscritta alla CI: feed JSON 2.0 ufficiali NIST al posto dell'API paginata, database CVE temporaneo isolato, controllo aggiornamenti sempre attivo, timeout scan 20 minuti/job 30 e artifact del log anche su errore. Soglia CVSS 7.0 e `failOnError=true` invariati.
 - Test del contratto sicurezza: 5/5 passati; prova runtime con feed localhost irraggiungibile: fallimento atteso (exit 1), senza falso verde. Scansione positiva da cache vuota completata in 9 minuti e 40 secondi: 66 dipendenze, 0 vulnerabilita rilevate, feed NVD aggiornato al 2026-10-12. OSS Index non eseguito per assenza delle credenziali richieste dal servizio; non e stato presentato come copertura verificata. Nuova CI da completare prima della chiusura.
-- Pubblicare anche `6e13671` insieme alla correzione; controllare i nuovi run prima di chiudere il consolidamento. Non passare al 4.4 con il gate ancora pendente.
+- Il checkpoint documentale `6e13671` e stato successivamente pubblicato insieme alla correzione; gli esiti dei run successivi sono riportati sotto.
 - Suite backend completa dopo il nuovo test: `mvn -B verify`, 312/312 test, zero errori o skip, packaging riuscito. YAML valido e `git diff --check` senza errori.
 - Pubblicati `6e13671` e `cca78d3`. CI `38263059026` verde: backend 312/312, frontend 205/205, PostgreSQL 105/105, prod-like e quality gate. Il dettaglio Playwright contiene 18 test passati e 1 flaky (acconto/annullo/storno passato al retry), quindi non viene descritto come esecuzione stabile 19/19.
 - La trace del primo tentativo mostra il refresh della ricerca ordini debounced durante il click su Registra incasso, senza invio del POST. Corretto l'helper E2E per attendere la risposta GET con il filtro esatto prima di aprire il dettaglio. Nessun timeout aumentato, retry aggiunto o controllo finanziario modificato. Typecheck E2E passato; runner locale `local-1-088b1283b3c8c1d3`: 19/19 browser senza retry, rate limit, backup/restore (7 secondi sul dataset sintetico), privilegi/rotazione e cleanup passati.
 - Security `38263059365` FALLITO: timeout di 20 minuti durante il caricamento dei feed NIST diretti, prima dell'analisi. Il log e stato conservato correttamente. Nessun esito SCA remoto positivo viene dichiarato.
 - Seconda correzione: mirror mantenuto da Dependency-Check e alimentato da NVD, con preflight obbligatorio che rifiuta dati oltre 48 ore, timestamp futuri o metadati invalidi/assenti. Nessun aumento dei timeout o riduzione della soglia CVSS. Test mirati 13/13; scansione a freddo in 1m24s: 66 dipendenze e 0 vulnerabilita rilevate, metadati e report con ultimo aggiornamento 2026-10-11T16:16:31Z. Preflight reale passato. Nuova CI da verificare.
 - Suite backend completa sulla seconda correzione: `mvn -B verify`, 320/320 test, nessun errore, fallimento o skip; packaging completato. I controlli remoti sul nuovo commit restano necessari.
+- Chiusura del 2026-10-12: gli otto file verificati coincidono con la copia di test e sono pubblicati in `a3407d35f5526f4a0e85c31578201f0fc951dea3`. Il repository reale e pulito e allineato a origin prima dell'aggiornamento documentale conclusivo.
+- [CI 38303795754](https://github.com/AimDefix03/gestionale-negozio-computer/actions/runs/38303795754): SUCCESS su `a3407d3`; backend Java 17 320/320, frontend 205/205 in 42 file, PostgreSQL 105/105, 19/19 Playwright senza retry, build e quality gate verdi. Backup/restore completato in 6 secondi sul dataset sintetico; privilegi/rotazione PostgreSQL e cleanup del runner isolato passati.
+- [Security 38303795737](https://github.com/AimDefix03/gestionale-negozio-computer/actions/runs/38303795737): SUCCESS su `a3407d3`, merge ref `3a3553934bed4dea30475ad766add141b54a9332`. Artifact remoto verificato: Dependency-Check 12.2.2, 66 dipendenze, 0 dipendenze vulnerabili e 0 CVE rilevate; NVD aggiornato al 2026-10-12T20:10:00Z; scansione Maven in 1m38s. Gitleaks, dependency review e npm audit verdi; CodeQL Java e TypeScript senza errori, 0 finding e nessun alert aperto nella PR.
+- PR #2 ancora draft; protezioni main confermate (quattro check obbligatori, branch aggiornata, una approvazione, nessun bypass amministratore, force push e cancellazione disabilitati). `main` resta a `6da79514b5f354ea730be255d05c36855477b0e6`. I risultati sopra identificano il commit applicativo verificato: ogni push successivo deve mantenere i propri controlli verdi prima del merge.
+- Beneficio operativo: gli aggiornamenti del gestionale sono controllati con dati CVE recenti e con una prova stabile del flusso incasso/annullo/storno; un feed assente o obsoleto blocca la scansione invece di dare falsa rassicurazione. Nessuna garanzia di assenza assoluta di vulnerabilita o di prontezza produttiva.
 - Nessuna migrazione nuova o modifica dei database operativi; nessun merge o deploy.
 
 ## Step
@@ -121,8 +127,8 @@
 - I 79 file autorizzati dello Step 4.2 sono sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
 - I 12 file autorizzati dello Step 3.10 sono sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
 - I 63 file autorizzati dello Step 3.9 restano sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
-- Il checkpoint applicativo `2d783d5` e pubblicato; la chiusura del consolidamento richiede la rivalidazione dei controlli remoti correnti, non il riuso dei risultati storici.
-- Il commit correttivo `a56df5f` ha CI verde; il controllo SCA remoto e l'aggiornamento documentale finale pubblicato restano da completare. La PR resta in draft, senza merge.
+- Il checkpoint applicativo `2d783d5` e pubblicato; il consolidamento e chiuso dai controlli remoti CI e sicurezza su `a3407d3`, senza riusare esiti precedenti falliti o annullati.
+- Nessun blocker tecnico residuo del consolidamento; la PR resta in draft, senza merge. L'aggiornamento documentale finale deve mantenere i propri check verdi prima di qualunque integrazione.
 - F-20A e chiuso nel repository reale con ricezione merce, costo documentato e KPI che distinguono copertura nota e quota non valorizzata.
 
 ## Verifiche Step 4.3
@@ -659,8 +665,9 @@
 
 - F-20 e chiuso: baseline reale, clone pulito, CI remota e protezione branch sono verificati.
 - Il gate migrazioni obbligatorio usa PostgreSQL 16 reale tramite Testcontainers; H2 resta soltanto feedback rapido della suite standard.
-- I controlli security devono essere rivalidati sul commit corrente; non sono inclusi tra i quattro status check obbligatori richiesti dallo Step 0.1. Non effettuare merge con scansioni fallite o pendenti.
-- La CI segnala Actions con runtime deprecato, migrazione imminente di `ubuntu-latest` e punteggi OpenSSF bassi su alcune dipendenze transitive. Aggiornamenti e pinning sono da trattare nello Step 5.1; non sono stati soppressi gli avvisi. La PR di consolidamento contiene 700 file e richiede revisione per dominio: l'integrazione CodeQL segnala il limite di 300 file nel recupero del diff, pur producendo analisi senza errori e 0 finding.
+- I controlli security sono verdi sul commit applicativo `a3407d3`; non sono inclusi tra i quattro status check obbligatori richiesti dallo Step 0.1. Ogni push successivo richiede rivalidazione; non effettuare merge con scansioni fallite o pendenti.
+- La CI segnala Actions con runtime deprecato, migrazione imminente di `ubuntu-latest` e punteggi OpenSSF bassi su alcune dipendenze transitive. Aggiornamenti e pinning sono da trattare nello Step 5.1; non sono stati soppressi gli avvisi. La PR di consolidamento contiene 702 file e richiede revisione per dominio: l'integrazione CodeQL segnala il limite di 300 file nel recupero del diff, pur producendo analisi senza errori e 0 finding.
+- La fonte NVD del manutentore e best-effort: il preflight limita l'eta dichiarata a 48 ore, ma non certifica la completezza dei dati upstream. OSS Index non e verificato per mancanza delle credenziali richieste dal servizio; 0 CVE rilevate non equivale ad assenza assoluta di vulnerabilita.
 - Gli account operativi storici non verificati sono in quarantena; la revisione manuale deve essere completata prima di consentire nuovi login agli eventuali dipendenti legittimi.
 - Le sessioni usano l'ID account stabile e una versione credenziali; il lifecycle non distruttivo di disabilitazione, riabilitazione e revoca e coperto dallo Step 3.3.
 - Le race critiche di sessioni e lockout sono incluse nella suite PostgreSQL trasversale obbligatoria.

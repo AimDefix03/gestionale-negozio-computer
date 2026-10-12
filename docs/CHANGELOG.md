@@ -7,6 +7,7 @@
 - Aggiunto un test del contratto CI e verificato il fallimento runtime con feed irraggiungibile; soglie CVSS e fail-closed invariati.
 - Aggiunti otto test del preflight NVD: dati validi, escaping Properties, dati obsoleti, data futura e metadati assenti o invalidi.
 - La diagnostica CI ha evidenziato un test browser passato al retry: l'helper ordini ora attende la risposta della ricerca debounced prima di aprire le operazioni, evitando il click durante il refresh della lista. Nessuna modifica alla logica dei pagamenti.
+- Consolidamento verificato su `a3407d3`: CI e sicurezza remote verdi; 320 test backend, 205 frontend, 105 PostgreSQL e 19 browser senza retry. Report SCA remoto: 66 dipendenze, 0 CVE rilevate, feed aggiornato e scansione in 1m38s. Nessun merge e nessuna implementazione dello Step 4.4.
 - Nessuna modifica a API applicative, frontend, schema o dati operativi. Risultati della prova a freddo e dei run remoti in `IMPLEMENTATION_PROGRESS.md`.
 
 ## 2026-10-11 - Consolidamento e correzioni dei gate
