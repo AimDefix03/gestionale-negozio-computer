@@ -2,12 +2,12 @@
 
 ## Stato generale
 
-- Current step: consolidamento Git e rivalidazione degli Step 0.2-4.3, IN_PROGRESS; Step 4.4 non iniziato
+- Current step: consolidamento Git degli Step 0.2-4.3 pubblicato, WAITING_REMOTE_SECURITY; Step 4.4 non iniziato
 - Last completed step nel repository reale: 4.3, Inventario fisico e rettifiche approvate
 - Last update: 2026-10-12
 - Roadmap completion: 32/48 step completati, sincronizzati e verificati nel repository reale (66.7%)
 - Il 66.7% misura gli step completati, non la prontezza produttiva. La precedente stima di maturita 95-97% non e supportata dai gate ancora aperti e viene ritirata.
-- Gate C rivalidato localmente sul contenuto candidato; controlli remoti da ripetere dopo commit e push
+- Gate C rivalidato localmente e CI remota verde su `a56df5f`; scansione dipendenze backend remota ancora pendente
 - Open P0: nessuno
 - Open P1: F-17, F-18, F-19; F-04 rivalidato localmente, conferma remota ancora pendente
 - Open P2: F-29, F-30
@@ -15,7 +15,7 @@
 
 ## Consolidamento 2026-10-11
 
-- Stato: IN_PROGRESS. Nessuna nuova funzionalita dello Step 4.4.
+- Stato: WAITING_REMOTE_SECURITY. Correzioni pubblicate, chiusura subordinata all'esito SCA remoto. Nessuna nuova funzionalita dello Step 4.4.
 - Checkpoint `2d783d5`, documentazione `76b1843`, parser download `622efb7` e flusso inventario `f330b00` gia pubblicati su `miglioramenti-gestionale`, PR #2 in draft.
 - La CI di `f330b00` ha evidenziato un contratto E2E obsoleto, un verificatore header non portabile su Linux e rilevazioni SCA backend. I 19 test browser remoti erano passati, ma questo non rendeva verde il gate prod-like completo.
 - Contratto aggiornato al conteggio con invio e approvazione separata; regressioni frontend su conservazione della bozza al refresh e isolamento tra sessioni.
@@ -26,8 +26,13 @@
 - PostgreSQL `fast`: 105/105 test; fixture popolate V14, V16 e V18 migrate fino a V35; nessuna migrazione nuova.
 - OWASP Dependency-Check 12.2.2: 66 dipendenze, 0 dipendenze vulnerabili e 0 CVE; aggiornamento NVD completato il 2026-10-11. Audit npm sul lockfile aggiornato: 0 vulnerabilita. Nessuna garanzia di assenza assoluta di vulnerabilita.
 - Runner prod-like `local-1-1d982202dc0b01db`: 19/19 Playwright, V1-V35, rate limit login/registrazione, CSP, container non-root/read-only, metriche/log, backup/restore (9 secondi sul dataset di prova), ruoli PostgreSQL separati e rotazione credenziali passati. Risorse temporanee del run rimosse; fail-closed startup 2/2 passato separatamente.
-- Le verifiche remote del nuovo commit sono ancora pendenti: nessun merge finche CI e sicurezza richieste non sono verdi.
 - Ripresa del 2026-10-12: repository reale pulito su `miglioramenti-gestionale`, HEAD `f330b00`; controllo Gitleaks 8.30.1 senza rete sui 15 file candidati completato senza rilevazioni.
+- I 15 file coincidono byte per byte con la copia verificata e sono pubblicati nel commit `a56df5f5bf89e879e26376f16ab691dc500c3bc1` su `miglioramenti-gestionale`. PR #2 aggiornata e mantenuta in draft.
+- [CI 38228668606](https://github.com/AimDefix03/gestionale-negozio-computer/actions/runs/38228668606): SUCCESS, inclusi backend Java 17, frontend, PostgreSQL, Docker prod-like e quality gate.
+- [Security 38228668503](https://github.com/AimDefix03/gestionale-negozio-computer/actions/runs/38228668503): Gitleaks, dependency review, npm audit e CodeQL Java/TypeScript passati; `Backend dependency inventory` ancora IN_PROGRESS al controllo del 2026-10-12. Le analisi CodeQL del merge ref `65090889c92c52b8287f7eaf31b0eb681a5c2fd7` riportano 0 risultati; nessun alert aperto sulla PR.
+- La scansione remota SCA ha durata prolungata; GitHub non rende ancora disponibile il log finale del job. Non e possibile dichiararla riuscita o attribuire con certezza la durata a una causa. Lo scan locale verde non sostituisce questo controllo.
+- Questo aggiornamento documentale resta in un commit locale, senza push per non annullare il run remoto attraverso `cancel-in-progress`. Non sono state cambiate soglie o disabilitati controlli.
+- Ripresa richiesta: verificare il run Security, analizzare eventuali errori, quindi pubblicare il commit documentale e controllare i nuovi run prima di chiudere il consolidamento. Non passare al 4.4 con il gate ancora pendente.
 - Nessuna migrazione nuova o modifica dei database operativi; nessun merge o deploy.
 
 ## Step
@@ -109,6 +114,7 @@
 - I 12 file autorizzati dello Step 3.10 sono sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
 - I 63 file autorizzati dello Step 3.9 restano sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
 - Il checkpoint applicativo `2d783d5` e pubblicato; la chiusura del consolidamento richiede la rivalidazione dei controlli remoti correnti, non il riuso dei risultati storici.
+- Il commit correttivo `a56df5f` ha CI verde; il controllo SCA remoto e l'aggiornamento documentale finale pubblicato restano da completare. La PR resta in draft, senza merge.
 - F-20A e chiuso nel repository reale con ricezione merce, costo documentato e KPI che distinguono copertura nota e quota non valorizzata.
 
 ## Verifiche Step 4.3
@@ -646,6 +652,7 @@
 - F-20 e chiuso: baseline reale, clone pulito, CI remota e protezione branch sono verificati.
 - Il gate migrazioni obbligatorio usa PostgreSQL 16 reale tramite Testcontainers; H2 resta soltanto feedback rapido della suite standard.
 - I controlli security devono essere rivalidati sul commit corrente; non sono inclusi tra i quattro status check obbligatori richiesti dallo Step 0.1. Non effettuare merge con scansioni fallite o pendenti.
+- La CI segnala Actions con runtime deprecato, migrazione imminente di `ubuntu-latest` e punteggi OpenSSF bassi su alcune dipendenze transitive. Aggiornamenti e pinning sono da trattare nello Step 5.1; non sono stati soppressi gli avvisi. La PR di consolidamento contiene 700 file e richiede revisione per dominio: l'integrazione CodeQL segnala il limite di 300 file nel recupero del diff, pur producendo analisi senza errori e 0 finding.
 - Gli account operativi storici non verificati sono in quarantena; la revisione manuale deve essere completata prima di consentire nuovi login agli eventuali dipendenti legittimi.
 - Le sessioni usano l'ID account stabile e una versione credenziali; il lifecycle non distruttivo di disabilitazione, riabilitazione e revoca e coperto dallo Step 3.3.
 - Le race critiche di sessioni e lockout sono incluse nella suite PostgreSQL trasversale obbligatoria.

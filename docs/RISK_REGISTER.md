@@ -2,7 +2,7 @@
 
 | ID | Rischio | Severita | Stato | Mitigazione |
 | --- | --- | --- | --- | --- |
-| R-001 | `web/` non tracciata in Git | Alta | Aperto | Consolidare baseline e includere la web app nel controllo versione. |
+| R-001 | `web/` non tracciata in Git | Alta | Mitigato | Web app versionata e pubblicata su `miglioramenti-gestionale`: baseline, checkpoint `2d783d5` e correzioni `a56df5f`. PR #2 in draft; CI verde sul commit correttivo, SCA remota pendente. Nessun merge o deploy. |
 | R-002 | H2 in memoria e `ddl-auto: update` | Alta | Mitigato | PostgreSQL, Flyway e `ddl-auto: validate` sono obbligatori; Testcontainers protegge le correzioni database critiche, gli upgrade popolati V14/V16/V18 arrivano a V29 e H2 resta soltanto feedback rapido. |
 | R-003 | Sessioni in memoria | Media | Mitigato | Sessioni backend persistite su database con token hashati, revoca logout e cleanup programmato. |
 | R-004 | Account demo hardcoded | Media | Mitigato | Bootstrap disabilitato per default in ogni profilo, credenziali note rifiutate e password nota conservata solo come impronta non reversibile. |
