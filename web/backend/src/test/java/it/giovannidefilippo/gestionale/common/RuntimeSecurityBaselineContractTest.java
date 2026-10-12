@@ -67,6 +67,29 @@ class RuntimeSecurityBaselineContractTest {
                 .contains("dependency-check-report.json");
     }
 
+    @Test
+    void remoteScaUsesOfficialFeedsWithBoundedRuntimeAndPreservedFailures() throws Exception {
+        String workflow = Files.readString(Path.of("../../.github/workflows/security.yml"));
+        String scaJob = workflow.substring(workflow.indexOf("  backend-dependency-inventory:"),
+                workflow.indexOf("  codeql:"));
+
+        assertThat(scaJob)
+                .contains("timeout-minutes: 30")
+                .contains("timeout-minutes: 20")
+                .contains("shell: bash")
+                .contains("set -euo pipefail")
+                .contains("-DnvdDatafeedUrl=https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz")
+                .contains("-DnvdValidForHours=0")
+                .contains("-DdataDirectory=\"${{ runner.temp }}/dependency-check-data\"")
+                .contains("tee target/dependency-check.log")
+                .contains("web/backend/target/dependency-check.log")
+                .contains("if: always()")
+                .doesNotContain("continue-on-error")
+                .doesNotContain("autoUpdate=false")
+                .doesNotContain("failOnError=false")
+                .doesNotContain("|| true");
+    }
+
     private static int major(String version) {
         return Integer.parseInt(version.split("\\.")[0]);
     }

@@ -2,7 +2,7 @@
 
 ## Stato generale
 
-- Current step: consolidamento Git degli Step 0.2-4.3 pubblicato, WAITING_REMOTE_SECURITY; Step 4.4 non iniziato
+- Current step: consolidamento Git degli Step 0.2-4.3, IN_PROGRESS; correzione avvio a freddo SCA remoto; Step 4.4 non iniziato
 - Last completed step nel repository reale: 4.3, Inventario fisico e rettifiche approvate
 - Last update: 2026-10-12
 - Roadmap completion: 32/48 step completati, sincronizzati e verificati nel repository reale (66.7%)
@@ -15,14 +15,14 @@
 
 ## Consolidamento 2026-10-11
 
-- Stato: WAITING_REMOTE_SECURITY. Correzioni pubblicate, chiusura subordinata all'esito SCA remoto. Nessuna nuova funzionalita dello Step 4.4.
+- Stato: IN_PROGRESS. Correzioni pubblicate, chiusura subordinata all'esito SCA remoto. Nessuna nuova funzionalita dello Step 4.4.
 - Checkpoint `2d783d5`, documentazione `76b1843`, parser download `622efb7` e flusso inventario `f330b00` gia pubblicati su `miglioramenti-gestionale`, PR #2 in draft.
 - La CI di `f330b00` ha evidenziato un contratto E2E obsoleto, un verificatore header non portabile su Linux e rilevazioni SCA backend. I 19 test browser remoti erano passati, ma questo non rendeva verde il gate prod-like completo.
 - Contratto aggiornato al conteggio con invio e approvazione separata; regressioni frontend su conservazione della bozza al refresh e isolamento tra sessioni.
 - Riprodotto il fallimento Linux del confronto `Retry-After` su CRLF e normalizzato il terminatore senza cambiare rate limiting o soglie. Aggiunti 16 casi positivi/negativi per login e registrazione.
 - Patch Spring Boot 4.1.1 / Spring Framework 7.0.9 / Spring Security 7.1.1 e Tomcat 11.0.26; Vitest 4.1.11 e patch transitiva source-map-js. Nessuna soppressione CVE o esclusione dei test.
 - Copia di verifica estratta dal commit remoto esatto `f330b0081c36d194e28f4dc8c3b300b8e27895dc`: l'estrazione Git locale si arrestava in lettura dei file iCloud. Non e stato inizializzato un repository alternativo.
-- Verifiche locali correnti: backend `mvn -B verify` 311/311; frontend `npm ci`, 205/205 test in 42 file, build TypeScript/Vite e typecheck E2E passati. Java locale 23 con release di compilazione 17; build Docker Java 17 riuscita.
+- Verifiche locali della patch `a56df5f`: backend `mvn -B verify` 311/311; frontend `npm ci`, 205/205 test in 42 file, build TypeScript/Vite e typecheck E2E passati. Java locale 23 con release di compilazione 17; build Docker Java 17 riuscita.
 - PostgreSQL `fast`: 105/105 test; fixture popolate V14, V16 e V18 migrate fino a V35; nessuna migrazione nuova.
 - OWASP Dependency-Check 12.2.2: 66 dipendenze, 0 dipendenze vulnerabili e 0 CVE; aggiornamento NVD completato il 2026-10-11. Audit npm sul lockfile aggiornato: 0 vulnerabilita. Nessuna garanzia di assenza assoluta di vulnerabilita.
 - Runner prod-like `local-1-1d982202dc0b01db`: 19/19 Playwright, V1-V35, rate limit login/registrazione, CSP, container non-root/read-only, metriche/log, backup/restore (9 secondi sul dataset di prova), ruoli PostgreSQL separati e rotazione credenziali passati. Risorse temporanee del run rimosse; fail-closed startup 2/2 passato separatamente.
@@ -30,9 +30,12 @@
 - I 15 file coincidono byte per byte con la copia verificata e sono pubblicati nel commit `a56df5f5bf89e879e26376f16ab691dc500c3bc1` su `miglioramenti-gestionale`. PR #2 aggiornata e mantenuta in draft.
 - [CI 38228668606](https://github.com/AimDefix03/gestionale-negozio-computer/actions/runs/38228668606): SUCCESS, inclusi backend Java 17, frontend, PostgreSQL, Docker prod-like e quality gate.
 - [Security 38228668503](https://github.com/AimDefix03/gestionale-negozio-computer/actions/runs/38228668503): Gitleaks, dependency review, npm audit e CodeQL Java/TypeScript passati; `Backend dependency inventory` ancora IN_PROGRESS al controllo del 2026-10-12. Le analisi CodeQL del merge ref `65090889c92c52b8287f7eaf31b0eb681a5c2fd7` riportano 0 risultati; nessun alert aperto sulla PR.
-- La scansione remota SCA ha durata prolungata; GitHub non rende ancora disponibile il log finale del job. Non e possibile dichiararla riuscita o attribuire con certezza la durata a una causa. Lo scan locale verde non sostituisce questo controllo.
-- Questo aggiornamento documentale resta in un commit locale, senza push per non annullare il run remoto attraverso `cancel-in-progress`. Non sono state cambiate soglie o disabilitati controlli.
-- Ripresa richiesta: verificare il run Security, analizzare eventuali errori, quindi pubblicare il commit documentale e controllare i nuovi run prima di chiudere il consolidamento. Non passare al 4.4 con il gate ancora pendente.
+- Alla prima ripresa il log finale SCA non era disponibile; gli esiti erano stati salvati nel commit locale `6e13671`, senza interrompere il run. Lo scan locale verde non sostituisce questo controllo.
+- Diagnosi successiva autorizzata: annullato il run `38228668503` dopo oltre due ore e acquisiti i log. Il runner, privo di API key NVD, era ancora nel download iniziale di 140.000/404.465 record (35%), prima dell'analisi. Il run annullato NON e superato.
+- Correzione circoscritta alla CI: feed JSON 2.0 ufficiali NIST al posto dell'API paginata, database CVE temporaneo isolato, controllo aggiornamenti sempre attivo, timeout scan 20 minuti/job 30 e artifact del log anche su errore. Soglia CVSS 7.0 e `failOnError=true` invariati.
+- Test del contratto sicurezza: 5/5 passati; prova runtime con feed localhost irraggiungibile: fallimento atteso (exit 1), senza falso verde. Scansione positiva da cache vuota completata in 9 minuti e 40 secondi: 66 dipendenze, 0 vulnerabilita rilevate, feed NVD aggiornato al 2026-10-12. OSS Index non eseguito per assenza delle credenziali richieste dal servizio; non e stato presentato come copertura verificata. Nuova CI da completare prima della chiusura.
+- Pubblicare anche `6e13671` insieme alla correzione; controllare i nuovi run prima di chiudere il consolidamento. Non passare al 4.4 con il gate ancora pendente.
+- Suite backend completa dopo il nuovo test: `mvn -B verify`, 312/312 test, zero errori o skip, packaging riuscito. YAML valido e `git diff --check` senza errori.
 - Nessuna migrazione nuova o modifica dei database operativi; nessun merge o deploy.
 
 ## Step

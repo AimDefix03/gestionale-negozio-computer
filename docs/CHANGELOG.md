@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-12 - Diagnosi e limite temporale della scansione backend
+
+- Diagnosticato il caricamento NVD via API senza chiave che fermava la CI prima dell'analisi delle dipendenze.
+- La CI usa i feed ufficiali NIST, cache temporanea isolata, aggiornamenti attivi, timeout espliciti e log conservati anche su errore.
+- Aggiunto un test del contratto CI e verificato il fallimento runtime con feed irraggiungibile; soglie CVSS e fail-closed invariati.
+- Nessuna modifica a API applicative, frontend, schema o dati operativi. Risultati della prova a freddo e dei run remoti in `IMPLEMENTATION_PROGRESS.md`.
+
 ## 2026-10-11 - Consolidamento e correzioni dei gate
 
 - Allineato il contratto E2E al conteggio fisico con approvazione separata introdotto nello Step 4.3.

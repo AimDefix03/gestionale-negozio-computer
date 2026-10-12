@@ -74,6 +74,16 @@ Aggiornamenti mirati, senza soppressioni o riduzione delle soglie:
 
 Le segnalazioni dipendono anche dai prerequisiti applicativi e non equivalgono a uno sfruttamento dimostrato del gestionale. La chiusura richiede comunque scansione aggiornata e suite verdi; risultati correnti in `IMPLEMENTATION_PROGRESS.md`. Non distribuire artefatti con scan fallito o non verificato.
 
+### Avvio a freddo della scansione NVD in CI
+
+Il 2026-10-12 il run `38228668503` e stato interrotto per diagnosticare un caricamento NVD durato oltre due ore: senza API key il runner aveva scaricato solo 140.000 degli oltre 404.000 record, prima di iniziare l'analisi. Non era un test applicativo bloccato e il run annullato non costituisce una verifica superata.
+
+Il job backend usa ora i [feed JSON 2.0 ufficiali NIST](https://nvd.nist.gov/vuln/data-feeds), supportati dalla [configurazione Dependency-Check](https://dependency-check.github.io/DependencyCheck/data/mirrornvd.html), attraverso `nvdDatafeedUrl`. Non sono necessari nuovi segreti o mirror di terze parti. La directory dati e isolata in `runner.temp`, il controllo degli aggiornamenti resta attivo con `nvdValidForHours=0` e nessun database CVE locale viene pubblicato nel repository.
+
+La fase scan ha un limite di 20 minuti e il job di 30. Il log `dependency-check.log` viene caricato insieme ai report anche in caso di errore; `bash` con `pipefail` preserva il codice di errore Maven quando l'output passa attraverso `tee`. Restano invariati `failOnError=true` e la soglia CVSS 7.0. Feed indisponibile, timeout e vulnerabilita bloccanti non producono un gate verde.
+
+Il test `RuntimeSecurityBaselineContractTest` protegge sorgente ufficiale, timeout, isolamento, log e assenza di bypass. La verifica runtime richiede sia una scansione da cache vuota sia un fallimento con feed irraggiungibile; risultati e run aggiornati in `IMPLEMENTATION_PROGRESS.md`.
+
 ### CodeQL
 
 CodeQL analizza:

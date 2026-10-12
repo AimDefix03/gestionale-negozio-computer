@@ -75,6 +75,7 @@ jobs:
   backend-dependency-inventory:
     name: Backend dependency inventory
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: web/backend
@@ -99,7 +100,15 @@ jobs:
         run: ../../scripts/security/verify-backend-fail-closed.sh target/gestionale-api-0.1.0.jar
 
       - name: Scan backend dependencies
-        run: mvn -B dependency-check:check
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B dependency-check:check \
+            '-DnvdDatafeedUrl=https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz' \
+            -DnvdValidForHours=0 \
+            -DdataDirectory="${{ runner.temp }}/dependency-check-data" \
+            2>&1 | tee target/dependency-check.log
 
       - name: Upload dependency scan reports
         if: always()
@@ -109,6 +118,7 @@ jobs:
           path: |
             web/backend/target/dependency-check-report.html
             web/backend/target/dependency-check-report.json
+            web/backend/target/dependency-check.log
           if-no-files-found: warn
           retention-days: 14
 
