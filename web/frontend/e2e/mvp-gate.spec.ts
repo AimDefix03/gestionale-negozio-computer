@@ -440,7 +440,14 @@ async function createAssistedOrder(page: Page, firstProductQuantity: number, inc
 
 async function openOrderOperations(page: Page, orderCode: string) {
   await openMenuEntry(page, 'Operazioni', 'Ordini');
+  const searchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.pathname === '/api/orders'
+      && url.searchParams.get('q') === orderCode;
+  });
   await page.getByLabel('Cerca', { exact: true }).fill(orderCode);
+  await readJson(await searchResponse);
   const row = page.getByRole('row').filter({ hasText: orderCode });
   await expect(row).toBeVisible();
   await row.getByRole('button', { name: 'Operazioni' }).click();

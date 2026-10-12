@@ -68,7 +68,7 @@ class RuntimeSecurityBaselineContractTest {
     }
 
     @Test
-    void remoteScaUsesOfficialFeedsWithBoundedRuntimeAndPreservedFailures() throws Exception {
+    void remoteScaUsesMaintainerFeedWithFreshnessGateBoundedRuntimeAndPreservedFailures() throws Exception {
         String workflow = Files.readString(Path.of("../../.github/workflows/security.yml"));
         String scaJob = workflow.substring(workflow.indexOf("  backend-dependency-inventory:"),
                 workflow.indexOf("  codeql:"));
@@ -78,10 +78,12 @@ class RuntimeSecurityBaselineContractTest {
                 .contains("timeout-minutes: 20")
                 .contains("shell: bash")
                 .contains("set -euo pipefail")
-                .contains("-DnvdDatafeedUrl=https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz")
+                .contains("-DnvdDatafeedUrl=https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz")
+                .contains("curl --fail --silent --show-error --connect-timeout 10 --max-time 60")
+                .contains("java ../../scripts/security/NvdFeedFreshnessCheck.java target/nvd-cache.properties")
                 .contains("-DnvdValidForHours=0")
                 .contains("-DdataDirectory=\"${{ runner.temp }}/dependency-check-data\"")
-                .contains("tee target/dependency-check.log")
+                .contains("tee -a target/dependency-check.log")
                 .contains("web/backend/target/dependency-check.log")
                 .contains("if: always()")
                 .doesNotContain("continue-on-error")

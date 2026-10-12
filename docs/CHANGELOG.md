@@ -3,8 +3,10 @@
 ## 2026-10-12 - Diagnosi e limite temporale della scansione backend
 
 - Diagnosticato il caricamento NVD via API senza chiave che fermava la CI prima dell'analisi delle dipendenze.
-- La CI usa i feed ufficiali NIST, cache temporanea isolata, aggiornamenti attivi, timeout espliciti e log conservati anche su errore.
+- Dopo il timeout dei feed NIST diretti sul runner, la CI usa il mirror del manutentore OWASP con preflight bloccante sulla freschezza (48 ore), cache temporanea isolata, aggiornamenti attivi, timeout espliciti e log conservati anche su errore.
 - Aggiunto un test del contratto CI e verificato il fallimento runtime con feed irraggiungibile; soglie CVSS e fail-closed invariati.
+- Aggiunti otto test del preflight NVD: dati validi, escaping Properties, dati obsoleti, data futura e metadati assenti o invalidi.
+- La diagnostica CI ha evidenziato un test browser passato al retry: l'helper ordini ora attende la risposta della ricerca debounced prima di aprire le operazioni, evitando il click durante il refresh della lista. Nessuna modifica alla logica dei pagamenti.
 - Nessuna modifica a API applicative, frontend, schema o dati operativi. Risultati della prova a freddo e dei run remoti in `IMPLEMENTATION_PROGRESS.md`.
 
 ## 2026-10-11 - Consolidamento e correzioni dei gate

@@ -78,11 +78,15 @@ Le segnalazioni dipendono anche dai prerequisiti applicativi e non equivalgono a
 
 Il 2026-10-12 il run `38228668503` e stato interrotto per diagnosticare un caricamento NVD durato oltre due ore: senza API key il runner aveva scaricato solo 140.000 degli oltre 404.000 record, prima di iniziare l'analisi. Non era un test applicativo bloccato e il run annullato non costituisce una verifica superata.
 
-Il job backend usa ora i [feed JSON 2.0 ufficiali NIST](https://nvd.nist.gov/vuln/data-feeds), supportati dalla [configurazione Dependency-Check](https://dependency-check.github.io/DependencyCheck/data/mirrornvd.html), attraverso `nvdDatafeedUrl`. Non sono necessari nuovi segreti o mirror di terze parti. La directory dati e isolata in `runner.temp`, il controllo degli aggiornamenti resta attivo con `nvdValidForHours=0` e nessun database CVE locale viene pubblicato nel repository.
+Il tentativo con i feed NIST diretti e riuscito localmente in 9m40s, ma il run `38263059365` ha raggiunto il timeout di 20 minuti durante il download sul runner GitHub. La [documentazione del manutentore](https://dependency-check.github.io/DependencyCheck/data/mirrornvd.html) segnala possibili forti rallentamenti dei feed NIST e documenta il proprio mirror alimentato dall'API NVD.
+
+Il job usa quindi `https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz`. Prima di avviare Maven scarica via HTTPS `cache.properties` con timeout e verifica `lastModifiedDate` attraverso `scripts/security/NvdFeedFreshnessCheck.java`: oltre 48 ore, data futura di oltre 5 minuti, metadati mancanti/invalidi o rete non disponibile bloccano il job. Il mirror e una dipendenza esterna best-effort, non una fonte con SLA: il controllo di freschezza non garantisce la completezza dei dati a monte.
+
+Non sono necessari nuovi segreti. La directory dati e isolata in `runner.temp`, gli aggiornamenti restano attivi con `nvdValidForHours=0` e nessun database CVE locale viene pubblicato nel repository. Non esiste fallback automatico a dati obsoleti o a una scansione saltata.
 
 La fase scan ha un limite di 20 minuti e il job di 30. Il log `dependency-check.log` viene caricato insieme ai report anche in caso di errore; `bash` con `pipefail` preserva il codice di errore Maven quando l'output passa attraverso `tee`. Restano invariati `failOnError=true` e la soglia CVSS 7.0. Feed indisponibile, timeout e vulnerabilita bloccanti non producono un gate verde.
 
-Il test `RuntimeSecurityBaselineContractTest` protegge sorgente ufficiale, timeout, isolamento, log e assenza di bypass. La verifica runtime richiede sia una scansione da cache vuota sia un fallimento con feed irraggiungibile; risultati e run aggiornati in `IMPLEMENTATION_PROGRESS.md`.
+Il test `RuntimeSecurityBaselineContractTest` protegge sorgente, preflight, timeout, isolamento, log e assenza di bypass. `NvdFeedFreshnessCheckTest` verifica otto casi positivi e negativi, inclusi escaping Java Properties, dati obsoleti, data futura e file assente. La verifica runtime richiede sia una scansione da cache vuota sia un fallimento con feed irraggiungibile; risultati e run aggiornati in `IMPLEMENTATION_PROGRESS.md`.
 
 ### CodeQL
 

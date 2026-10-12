@@ -104,11 +104,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+            https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/cache.properties \
+            -o target/nvd-cache.properties 2>&1 | tee target/dependency-check.log
+          java ../../scripts/security/NvdFeedFreshnessCheck.java target/nvd-cache.properties \
+            2>&1 | tee -a target/dependency-check.log
           mvn -B dependency-check:check \
-            '-DnvdDatafeedUrl=https://nvd.nist.gov/feeds/json/cve/2.0/nvdcve-2.0-{0}.json.gz' \
+            '-DnvdDatafeedUrl=https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz' \
             -DnvdValidForHours=0 \
             -DdataDirectory="${{ runner.temp }}/dependency-check-data" \
-            2>&1 | tee target/dependency-check.log
+            2>&1 | tee -a target/dependency-check.log
 
       - name: Upload dependency scan reports
         if: always()
@@ -119,6 +124,7 @@ jobs:
             web/backend/target/dependency-check-report.html
             web/backend/target/dependency-check-report.json
             web/backend/target/dependency-check.log
+            web/backend/target/nvd-cache.properties
           if-no-files-found: warn
           retention-days: 14
 
