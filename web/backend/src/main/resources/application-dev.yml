@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: ${GESTIONALE_DB_URL:jdbc:postgresql://localhost:5432/gestionale}
+    driver-class-name: org.postgresql.Driver
+    username: ${GESTIONALE_DB_RUNTIME_USERNAME:gestionale_runtime}
+    password: ${GESTIONALE_DB_RUNTIME_PASSWORD:}
+  h2:
+    console:
+      enabled: false
+  flyway:
+    url: ${GESTIONALE_DB_URL:jdbc:postgresql://localhost:5432/gestionale}
+    user: ${GESTIONALE_DB_MIGRATOR_USERNAME:gestionale_migrator}
+    password: ${GESTIONALE_DB_MIGRATOR_PASSWORD:}
+    init-sqls: SET ROLE ${GESTIONALE_DB_OWNER_USERNAME:gestionale_owner}
+    clean-disabled: true
+
+gestionale:
+  bootstrap:
+    super-admin:
+      enabled: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_ENABLED:false}
+      username: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_USERNAME:}
+      password: ${GESTIONALE_BOOTSTRAP_SUPER_ADMIN_PASSWORD:}

@@ -1,0 +1,26 @@
+services:
+  postgres:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}
+  backend:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}
+  frontend:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}
+  prometheus:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}
+
+volumes:
+  gestionale-prodlike-postgres-data:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}
+  gestionale-prodlike-prometheus-data:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}
+
+networks:
+  default:
+    labels:
+      it.giovannidefilippo.gestionale.run-id: ${GESTIONALE_RUN_ID:?Set GESTIONALE_RUN_ID}

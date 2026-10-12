@@ -1,0 +1,138 @@
+# Security Scans
+
+## Scopo
+
+Questo documento descrive i controlli automatici introdotti per ridurre il rischio di vulnerabilita note, dipendenze pericolose e regressioni di sicurezza evidenti.
+
+Le scansioni non sostituiscono una revisione di sicurezza completa, un penetration test o una valutazione GDPR.
+
+## Workflow
+
+La workflow principale si trova in `.github/workflows/security.yml`.
+
+Viene eseguita su:
+
+- push verso `main`;
+- pull request verso `main`;
+- esecuzione manuale;
+- controllo programmato ogni lunedi mattina.
+
+## Controlli presenti
+
+### Gitleaks
+
+Gitleaks analizza la storia Git completa e il contenuto del checkout tramite `gitleaks/gitleaks-action@v2`. Il checkout usa `fetch-depth: 0` per non limitare il controllo all'ultimo commit.
+
+Ogni rilevazione deve essere verificata. Un valore reale committato va revocato anche se il commit viene successivamente corretto. Le eccezioni possono essere aggiunte solo per falsi positivi dimostrati, con regole strette e revisionate.
+
+Controllo locale equivalente:
+
+```bash
+docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --redact --no-banner
+```
+
+### Dependency review
+
+Sulle pull request, GitHub confronta le dipendenze modificate e blocca la PR se viene introdotta una vulnerabilita con severita alta o critica.
+
+Questo controllo richiede il supporto GitHub Dependency Graph attivo sul repository.
+
+### Frontend npm audit
+
+Nel frontend viene eseguito:
+
+```bash
+npm run audit
+```
+
+Il controllo fallisce su vulnerabilita almeno `high` rilevate da npm.
+
+### Backend dependency inventory e SCA
+
+Nel backend viene eseguito:
+
+```bash
+mvn -B -DskipTests dependency:tree
+mvn -B dependency-check:check
+```
+
+Il primo comando rende leggibile il grafo Maven. OWASP Dependency-Check analizza poi le dipendenze contro i feed CVE, fallisce in caso di errore dello scanner o vulnerabilita con CVSS almeno 7 e pubblica i report `target/dependency-check-report.html` e `target/dependency-check-report.json` per 14 giorni.
+
+Baseline locale verificata il 2026-08-04: 66 dipendenze analizzate, 0 dipendenze vulnerabili e 0 vulnerabilita nel report finale. Il primo passaggio ha bloccato versioni vulnerabili di Tomcat e pgJDBC; l'aggiornamento e stato seguito dalla suite completa e da una nuova scansione pulita.
+
+La CI genera inoltre il JAR e verifica che l'avvio senza configurazione e quello `prod` privo di segreti terminino fail-closed tramite `scripts/security/verify-backend-fail-closed.sh`.
+
+### Rivalidazione del consolidamento 2026-10-11
+
+La scansione verde del 2026-08-04 e un'evidenza storica, non una garanzia sulle CVE pubblicate successivamente. Il run remoto `36490016617` ha bloccato correttamente dipendenze Spring e Tomcat; l'audit npm corrente ha inoltre rilevato problemi in Vitest/tinypool e source-map-js.
+
+Aggiornamenti mirati, senza soppressioni o riduzione delle soglie:
+
+- Spring Boot 4.1.1 gestisce Spring Framework 7.0.9 e Spring Security 7.1.1; vedere gli advisory ufficiali [Spring Framework](https://spring.io/security/cve-2026-59313/) e [Spring Security](https://spring.io/security/cve-2026-59270/).
+- Tomcat 11.0.26, secondo la [matrice Apache](https://tomcat.apache.org/security-11.html).
+- Vitest 4.1.11, prima linea corretta indicata dall'[advisory del manutentore](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9), e aggiornamento patch di source-map-js nel lockfile. La nuova catena Vitest non dipende da tinypool.
+
+Le segnalazioni dipendono anche dai prerequisiti applicativi e non equivalgono a uno sfruttamento dimostrato del gestionale. La chiusura richiede comunque scansione aggiornata e suite verdi; risultati correnti in `IMPLEMENTATION_PROGRESS.md`. Non distribuire artefatti con scan fallito o non verificato.
+
+### Avvio a freddo della scansione NVD in CI
+
+Il 2026-10-12 il run `38228668503` e stato interrotto per diagnosticare un caricamento NVD durato oltre due ore: senza API key il runner aveva scaricato solo 140.000 degli oltre 404.000 record, prima di iniziare l'analisi. Non era un test applicativo bloccato e il run annullato non costituisce una verifica superata.
+
+Il tentativo con i feed NIST diretti e riuscito localmente in 9m40s, ma il run `38263059365` ha raggiunto il timeout di 20 minuti durante il download sul runner GitHub. La [documentazione del manutentore](https://dependency-check.github.io/DependencyCheck/data/mirrornvd.html) segnala possibili forti rallentamenti dei feed NIST e documenta il proprio mirror alimentato dall'API NVD.
+
+Il job usa quindi `https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz`. Prima di avviare Maven scarica via HTTPS `cache.properties` con timeout e verifica `lastModifiedDate` attraverso `scripts/security/NvdFeedFreshnessCheck.java`: oltre 48 ore, data futura di oltre 5 minuti, metadati mancanti/invalidi o rete non disponibile bloccano il job. Il mirror e una dipendenza esterna best-effort, non una fonte con SLA: il controllo di freschezza non garantisce la completezza dei dati a monte.
+
+Non sono necessari nuovi segreti. La directory dati e isolata in `runner.temp`, gli aggiornamenti restano attivi con `nvdValidForHours=0` e nessun database CVE locale viene pubblicato nel repository. Non esiste fallback automatico a dati obsoleti o a una scansione saltata.
+
+La fase scan ha un limite di 20 minuti e il job di 30. Il log `dependency-check.log` viene caricato insieme ai report anche in caso di errore; `bash` con `pipefail` preserva il codice di errore Maven quando l'output passa attraverso `tee`. Restano invariati `failOnError=true` e la soglia CVSS 7.0. Feed indisponibile, timeout e vulnerabilita bloccanti non producono un gate verde.
+
+Il test `RuntimeSecurityBaselineContractTest` protegge sorgente, preflight, timeout, isolamento, log e assenza di bypass. `NvdFeedFreshnessCheckTest` verifica otto casi positivi e negativi, inclusi escaping Java Properties, dati obsoleti, data futura e file assente. La verifica runtime richiede sia una scansione da cache vuota sia un fallimento con feed irraggiungibile; risultati e run aggiornati in `IMPLEMENTATION_PROGRESS.md`.
+
+### CodeQL
+
+CodeQL analizza:
+
+- Java/Spring Boot;
+- JavaScript/TypeScript React.
+
+Il backend viene compilato con:
+
+```bash
+mvn -B -DskipTests package
+```
+
+Il frontend viene compilato con:
+
+```bash
+npm ci
+npm run build
+```
+
+## Dependabot
+
+Il file `.github/dependabot.yml` abilita aggiornamenti settimanali per:
+
+- dipendenze Maven;
+- dipendenze npm;
+- GitHub Actions.
+
+Gli aggiornamenti devono essere trattati come pull request normali: CI, security workflow e review prima del merge.
+
+## Soglie attuali
+
+- Vulnerabilita frontend: blocco da severita `high`.
+- Dependency review: blocco da severita `high`.
+- Dipendenze backend: blocco da CVSS `7.0` e scanner fail-closed.
+- CodeQL: risultati pubblicati nella sezione Security di GitHub.
+- Gitleaks: workflow fallita in presenza di segreti rilevati nella storia o nel checkout.
+
+## Limiti attuali
+
+Restano fuori da questo step:
+
+- SCA professionale con policy licenze avanzate;
+- DAST contro ambiente avviato;
+- container image scanning;
+- test di sicurezza end-to-end.
+
+Questi punti sono candidati per gli step successivi.
