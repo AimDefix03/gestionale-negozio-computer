@@ -70,6 +70,8 @@ Le sei porte devono essere numeriche e distinte. Il runner interrompe l'esecuzio
 
 La matrice browser comprende Chromium a 1440, 768 e 390 px, Firefox a 1440 px e WebKit a 1440 px. I 19 test usano selettori semantici: Chromium esegue anche i sette workflow verticali MVP, mentre Firefox e WebKit coprono autenticazione e accessibilita. La suite verifica l'assenza di violazioni axe critiche o serie e conserva trace, screenshot e video in caso di errore.
 
+Il workflow stock usa il conteggio fisico con invio del dipendente e approvazione di un responsabile distinto, non la rettifica diretta rimossa nello Step 4.3. I verificatori di login e registrazione normalizzano CRLF prima del confronto esatto di `Retry-After`, per funzionare sia con grep BSD sia con GNU grep. `RateLimitVerifierTest` verifica header LF/CRLF, ritardo errato, request ID assente, codice errato, limite non applicato, health non valido e risposte inattese senza contattare servizi reali.
+
 Il nome progetto viene generato casualmente con prefisso `gestionale-prodlike-`. Puo essere reso riproducibile con `PRODLIKE_RUN_ID` oppure sostituito con `PRODLIKE_PROJECT_NAME`, ma deve conservare il prefisso previsto e non deve identificare un progetto gia esistente.
 
 ## Diagnostica

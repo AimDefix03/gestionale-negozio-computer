@@ -2,6 +2,18 @@
 
 ## Stato verificato
 
+Rivalidazione locale del consolidamento il 2026-10-11, senza iniziare lo Step 4.4:
+
+- `mvn -B verify` in `web/backend`: 311/311 test e packaging riuscito.
+- `npm ci`, `npm test`, `npm run build`, `npm run typecheck:e2e` in `web/frontend`: 205/205 test in 42 file, build TypeScript/Vite e typecheck E2E riusciti.
+- `sh scripts/db/verify-postgresql-suite.sh fast`: 105/105 test su PostgreSQL e upgrade popolati V14/V16/V18 fino a V35 riusciti.
+- `sh scripts/ci/run-prod-like-verification.sh`: 19/19 Playwright e controlli infrastrutturali, rate limit, backup/restore e least privilege riusciti nel run isolato `local-1-1d982202dc0b01db`.
+- Scansione OWASP Dependency-Check aggiornata: 66 dipendenze, 0 CVE; `npm audit`: 0 vulnerabilita. Avvio fail-closed: 2/2.
+
+Le prove sono state eseguite su una copia del commit remoto esatto `f330b0081c36d194e28f4dc8c3b300b8e27895dc` con le correzioni candidate. Non includono la validazione con un operatore reale o un rilascio produttivo. Esito e riferimenti della successiva CI sono tracciati in `IMPLEMENTATION_PROGRESS.md`.
+
+## Evidenze storiche
+
 Verificato il 2026-09-05.
 
 Step 4.3 inventario fisico e rettifiche approvate:

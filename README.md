@@ -6,7 +6,7 @@ La linea produttiva e composta da backend Spring Boot, frontend React e PostgreS
 
 ## Stato del progetto
 
-Il progetto e un prototipo web avanzato con MVP tecnico verificato. I finding P0 sono chiusi, il runtime Spring usa una linea OSS supportata, i runner Docker sono isolati per project e run ID, gli upgrade storici critici sono corretti, i ledger di magazzino e finanziario sono autorevoli e le mutazioni critiche sono idempotenti. PostgreSQL usa identita separate per ownership, migrazioni, runtime, backup e restore; i Gate A, B e C sono chiusi tecnicamente. La maturita e stimata al 95-97% nel repository reale dopo lo Step 4.3. Validazione operatore e fasi produttive successive restano necessarie prima di produzione o commercializzazione.
+Il progetto e un prototipo web avanzato con MVP tecnico verificato. I finding P0 sono chiusi, i runner Docker sono isolati per project e run ID, gli upgrade storici critici sono corretti, i ledger di magazzino e finanziario sono autorevoli e le mutazioni critiche sono idempotenti. PostgreSQL usa identita separate per ownership, migrazioni, runtime, backup e restore. Gli Step fino al 4.3 corrispondono a 32/48 step della roadmap (66.7%): non e una percentuale di prontezza produttiva. Lo stato aggiornato dei gate, delle scansioni e delle verifiche e in `IMPLEMENTATION_PROGRESS.md`. Validazione operatore e fasi produttive successive restano necessarie prima di produzione o commercializzazione.
 
 - Il backend applica autorizzazioni, validazioni e regole aziendali lato server.
 - Il database evolve tramite migrazioni Flyway versionate.

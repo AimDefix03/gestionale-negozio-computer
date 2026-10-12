@@ -2,16 +2,33 @@
 
 ## Stato generale
 
-- Current step: 4.3, Inventario fisico e rettifiche approvate, completato, sincronizzato e verificato
+- Current step: consolidamento Git e rivalidazione degli Step 0.2-4.3, IN_PROGRESS; Step 4.4 non iniziato
 - Last completed step nel repository reale: 4.3, Inventario fisico e rettifiche approvate
-- Last update: 2026-09-28
+- Last update: 2026-10-12
 - Roadmap completion: 32/48 step completati, sincronizzati e verificati nel repository reale (66.7%)
-- Maturita realistica stimata: 95-97% nel repository reale
-- Gate C verificato tecnicamente e chiuso nel repository reale
+- Il 66.7% misura gli step completati, non la prontezza produttiva. La precedente stima di maturita 95-97% non e supportata dai gate ancora aperti e viene ritirata.
+- Gate C rivalidato localmente sul contenuto candidato; controlli remoti da ripetere dopo commit e push
 - Open P0: nessuno
-- Open P1: F-17, F-18, F-19
+- Open P1: F-17, F-18, F-19; F-04 rivalidato localmente, conferma remota ancora pendente
 - Open P2: F-29, F-30
 - Open P3: nessuno
+
+## Consolidamento 2026-10-11
+
+- Stato: IN_PROGRESS. Nessuna nuova funzionalita dello Step 4.4.
+- Checkpoint `2d783d5`, documentazione `76b1843`, parser download `622efb7` e flusso inventario `f330b00` gia pubblicati su `miglioramenti-gestionale`, PR #2 in draft.
+- La CI di `f330b00` ha evidenziato un contratto E2E obsoleto, un verificatore header non portabile su Linux e rilevazioni SCA backend. I 19 test browser remoti erano passati, ma questo non rendeva verde il gate prod-like completo.
+- Contratto aggiornato al conteggio con invio e approvazione separata; regressioni frontend su conservazione della bozza al refresh e isolamento tra sessioni.
+- Riprodotto il fallimento Linux del confronto `Retry-After` su CRLF e normalizzato il terminatore senza cambiare rate limiting o soglie. Aggiunti 16 casi positivi/negativi per login e registrazione.
+- Patch Spring Boot 4.1.1 / Spring Framework 7.0.9 / Spring Security 7.1.1 e Tomcat 11.0.26; Vitest 4.1.11 e patch transitiva source-map-js. Nessuna soppressione CVE o esclusione dei test.
+- Copia di verifica estratta dal commit remoto esatto `f330b0081c36d194e28f4dc8c3b300b8e27895dc`: l'estrazione Git locale si arrestava in lettura dei file iCloud. Non e stato inizializzato un repository alternativo.
+- Verifiche locali correnti: backend `mvn -B verify` 311/311; frontend `npm ci`, 205/205 test in 42 file, build TypeScript/Vite e typecheck E2E passati. Java locale 23 con release di compilazione 17; build Docker Java 17 riuscita.
+- PostgreSQL `fast`: 105/105 test; fixture popolate V14, V16 e V18 migrate fino a V35; nessuna migrazione nuova.
+- OWASP Dependency-Check 12.2.2: 66 dipendenze, 0 dipendenze vulnerabili e 0 CVE; aggiornamento NVD completato il 2026-10-11. Audit npm sul lockfile aggiornato: 0 vulnerabilita. Nessuna garanzia di assenza assoluta di vulnerabilita.
+- Runner prod-like `local-1-1d982202dc0b01db`: 19/19 Playwright, V1-V35, rate limit login/registrazione, CSP, container non-root/read-only, metriche/log, backup/restore (9 secondi sul dataset di prova), ruoli PostgreSQL separati e rotazione credenziali passati. Risorse temporanee del run rimosse; fail-closed startup 2/2 passato separatamente.
+- Le verifiche remote del nuovo commit sono ancora pendenti: nessun merge finche CI e sicurezza richieste non sono verdi.
+- Ripresa del 2026-10-12: repository reale pulito su `miglioramenti-gestionale`, HEAD `f330b00`; controllo Gitleaks 8.30.1 senza rete sui 15 file candidati completato senza rilevazioni.
+- Nessuna migrazione nuova o modifica dei database operativi; nessun merge o deploy.
 
 ## Step
 
@@ -91,7 +108,7 @@
 - I 79 file autorizzati dello Step 4.2 sono sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
 - I 12 file autorizzati dello Step 3.10 sono sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
 - I 63 file autorizzati dello Step 3.9 restano sincronizzati nel repository reale e verificati byte per byte; nessun file estraneo all'inventario e stato sovrascritto.
-- Il checkpoint applicativo `2d783d5` e stato creato; lo stato remoto viene verificato separatamente al termine del consolidamento.
+- Il checkpoint applicativo `2d783d5` e pubblicato; la chiusura del consolidamento richiede la rivalidazione dei controlli remoti correnti, non il riuso dei risultati storici.
 - F-20A e chiuso nel repository reale con ricezione merce, costo documentato e KPI che distinguono copertura nota e quota non valorizzata.
 
 ## Verifiche Step 4.3
@@ -628,7 +645,7 @@
 
 - F-20 e chiuso: baseline reale, clone pulito, CI remota e protezione branch sono verificati.
 - Il gate migrazioni obbligatorio usa PostgreSQL 16 reale tramite Testcontainers; H2 resta soltanto feedback rapido della suite standard.
-- I controlli security sono verdi ma non sono inclusi tra i quattro status check obbligatori richiesti dallo Step 0.1.
+- I controlli security devono essere rivalidati sul commit corrente; non sono inclusi tra i quattro status check obbligatori richiesti dallo Step 0.1. Non effettuare merge con scansioni fallite o pendenti.
 - Gli account operativi storici non verificati sono in quarantena; la revisione manuale deve essere completata prima di consentire nuovi login agli eventuali dipendenti legittimi.
 - Le sessioni usano l'ID account stabile e una versione credenziali; il lifecycle non distruttivo di disabilitazione, riabilitazione e revoca e coperto dallo Step 3.3.
 - Le race critiche di sessioni e lockout sono incluse nella suite PostgreSQL trasversale obbligatoria.

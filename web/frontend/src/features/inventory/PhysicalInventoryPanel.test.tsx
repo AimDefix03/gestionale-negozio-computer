@@ -2,12 +2,61 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import PhysicalInventoryPanel from './PhysicalInventoryPanel';
+import type { PhysicalInventoryFlowController } from './usePhysicalInventoryFlow';
 
 describe('PhysicalInventoryPanel', () => {
   it('richiede una motivazione e rende esplicita l’approvazione separata', async () => {
     const user = userEvent.setup();
     const approve = vi.fn();
-    render(<PhysicalInventoryPanel flow={{
+    render(<PhysicalInventoryPanel flow={createFlow(approve)} products={[]} busy={false} />);
+
+    const approveButton = screen.getByRole('button', { name: 'Approva differenze' });
+    expect(approveButton).toBeDisabled();
+    expect(screen.getByText('Differenza -2')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Motivazione decisione'), 'Conteggio verificato');
+    await user.click(approveButton);
+    expect(approve).toHaveBeenCalledWith('Conteggio verificato');
+  });
+
+  it('preserva quantita, nota e motivazione durante il refresh della stessa sessione', async () => {
+    const user = userEvent.setup();
+    const flow = createFlow();
+    flow.detail!.capabilities.canCount = true;
+    const { rerender } = render(<PhysicalInventoryPanel flow={flow} products={[]} busy={false} />);
+
+    await user.clear(screen.getByLabelText('Quantità contata'));
+    await user.type(screen.getByLabelText('Quantità contata'), '12');
+    await user.clear(screen.getByLabelText('Nota'));
+    await user.type(screen.getByLabelText('Nota'), 'Conteggio in corso');
+    await user.type(screen.getByLabelText('Motivazione decisione'), 'Verifica scaffale');
+    rerender(<PhysicalInventoryPanel flow={{ ...flow, detail: { ...flow.detail!, version: 3 } }} products={[]} busy={false} />);
+
+    expect(screen.getByLabelText('Quantità contata')).toHaveValue(12);
+    expect(screen.getByLabelText('Nota')).toHaveValue('Conteggio in corso');
+    expect(screen.getByLabelText('Motivazione decisione')).toHaveValue('Verifica scaffale');
+    await user.click(screen.getByRole('button', { name: 'Registra' }));
+    expect(flow.count).toHaveBeenCalledWith(52, { countedQuantity: 12, note: 'Conteggio in corso' });
+  });
+
+  it('non trasferisce la bozza quando si apre una sessione diversa', async () => {
+    const user = userEvent.setup();
+    const flow = createFlow();
+    flow.detail!.capabilities.canCount = true;
+    const { rerender } = render(<PhysicalInventoryPanel flow={flow} products={[]} busy={false} />);
+    await user.clear(screen.getByLabelText('Quantità contata'));
+    await user.type(screen.getByLabelText('Quantità contata'), '12');
+    await user.type(screen.getByLabelText('Nota'), ' nuova bozza');
+    await user.type(screen.getByLabelText('Motivazione decisione'), 'Non trasferire');
+
+    rerender(<PhysicalInventoryPanel flow={{ ...flow, selectedId: 42, detail: { ...flow.detail!, id: 42 } }} products={[]} busy={false} />);
+    expect(screen.getByLabelText('Quantità contata')).toHaveValue(8);
+    expect(screen.getByLabelText('Nota')).toHaveValue('Scaffale A');
+    expect(screen.getByLabelText('Motivazione decisione')).toHaveValue('');
+  });
+});
+
+function createFlow(approve = vi.fn()): PhysicalInventoryFlowController {
+  return {
       query: { page: 0, size: 6 },
       page: { content: [], page: 0, size: 6, totalElements: 0, totalPages: 0, first: true, last: true },
       loading: false,
@@ -72,13 +121,5 @@ describe('PhysicalInventoryPanel', () => {
       cancel: vi.fn(),
       refreshResources: vi.fn(),
       reset: vi.fn()
-    }} products={[]} busy={false} />);
-
-    const approveButton = screen.getByRole('button', { name: 'Approva differenze' });
-    expect(approveButton).toBeDisabled();
-    expect(screen.getByText('Differenza -2')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Motivazione decisione'), 'Conteggio verificato');
-    await user.click(approveButton);
-    expect(approve).toHaveBeenCalledWith('Conteggio verificato');
-  });
-});
+  };
+}

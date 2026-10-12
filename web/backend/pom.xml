@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -23,7 +23,7 @@
         <testcontainers.version>2.0.5</testcontainers.version>
         <owasp-dependency-check.version>12.2.2</owasp-dependency-check.version>
         <h2.version>2.3.232</h2.version>
-        <tomcat.version>11.0.24</tomcat.version>
+        <tomcat.version>11.0.26</tomcat.version>
         <postgresql.version>42.7.12</postgresql.version>
         <log4j2.version>2.25.5</log4j2.version>
         <apache-poi.version>5.5.1</apache-poi.version>

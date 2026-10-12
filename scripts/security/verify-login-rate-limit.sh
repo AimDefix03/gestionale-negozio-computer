@@ -47,7 +47,8 @@ if [ "$limited" != true ]; then
   exit 1
 fi
 
-grep -Eiq "^Retry-After: ${EXPECTED_RETRY_AFTER}\\r?$" "$TEMP_DIR/headers"
+tr -d '\r' <"$TEMP_DIR/headers" >"$TEMP_DIR/normalized-headers"
+grep -Eiq "^Retry-After: ${EXPECTED_RETRY_AFTER}$" "$TEMP_DIR/normalized-headers"
 grep -Eiq '^Content-Type: application/json' "$TEMP_DIR/headers"
 grep -Eiq '^Cache-Control: no-store' "$TEMP_DIR/headers"
 grep -Eiq '^X-Content-Type-Options: nosniff' "$TEMP_DIR/headers"

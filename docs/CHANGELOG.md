@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-11 - Consolidamento e correzioni dei gate
+
+- Allineato il contratto E2E al conteggio fisico con approvazione separata introdotto nello Step 4.3.
+- Aggiunte regressioni per la conservazione del conteggio in corso al refresh e per l'isolamento delle bozze tra sessioni inventariali.
+- Corretto il confronto degli header CRLF nei verificatori rate limit su Linux, con 16 casi positivi e negativi.
+- Aggiornate le dipendenze segnalate dai gate: Spring Boot 4.1.1, Tomcat 11.0.26, Vitest 4.1.11 e source-map-js.
+- Nessuna nuova migrazione, modifica dei dati operativi o funzione dello Step 4.4. Esiti di verifica e stato remoto registrati in `IMPLEMENTATION_PROGRESS.md`.
+
 ## 2026-09-05 - Step 4.3 inventario fisico e rettifiche approvate
 
 - Introdotte sessioni di inventario con snapshot teorico, conteggio per riga, differenza, invio, approvazione separata e annullo motivato.

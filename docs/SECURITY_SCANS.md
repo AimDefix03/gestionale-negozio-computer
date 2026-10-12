@@ -62,6 +62,18 @@ Baseline locale verificata il 2026-08-04: 66 dipendenze analizzate, 0 dipendenze
 
 La CI genera inoltre il JAR e verifica che l'avvio senza configurazione e quello `prod` privo di segreti terminino fail-closed tramite `scripts/security/verify-backend-fail-closed.sh`.
 
+### Rivalidazione del consolidamento 2026-10-11
+
+La scansione verde del 2026-08-04 e un'evidenza storica, non una garanzia sulle CVE pubblicate successivamente. Il run remoto `36490016617` ha bloccato correttamente dipendenze Spring e Tomcat; l'audit npm corrente ha inoltre rilevato problemi in Vitest/tinypool e source-map-js.
+
+Aggiornamenti mirati, senza soppressioni o riduzione delle soglie:
+
+- Spring Boot 4.1.1 gestisce Spring Framework 7.0.9 e Spring Security 7.1.1; vedere gli advisory ufficiali [Spring Framework](https://spring.io/security/cve-2026-59313/) e [Spring Security](https://spring.io/security/cve-2026-59270/).
+- Tomcat 11.0.26, secondo la [matrice Apache](https://tomcat.apache.org/security-11.html).
+- Vitest 4.1.11, prima linea corretta indicata dall'[advisory del manutentore](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9), e aggiornamento patch di source-map-js nel lockfile. La nuova catena Vitest non dipende da tinypool.
+
+Le segnalazioni dipendono anche dai prerequisiti applicativi e non equivalgono a uno sfruttamento dimostrato del gestionale. La chiusura richiede comunque scansione aggiornata e suite verdi; risultati correnti in `IMPLEMENTATION_PROGRESS.md`. Non distribuire artefatti con scan fallito o non verificato.
+
 ### CodeQL
 
 CodeQL analizza:
